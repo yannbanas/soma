@@ -1,0 +1,22 @@
+[package]
+name = "soma-hdc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "SOMA — Hyperdimensional Computing semantic index (Random Indexing D=10000)"
+
+[dependencies]
+soma-core  = { workspace = true }
+ndarray    = { workspace = true }
+rand       = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+once_cell  = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "hdc_bench"
+harness = false

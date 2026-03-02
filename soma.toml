@@ -1,0 +1,45 @@
+[soma]
+data_dir   = "~/.local/share/soma"
+default_workspace = "default"
+log_level  = "info"
+
+[bio]
+prune_threshold            = 0.05
+physarum_interval_hours    = 2
+consolidation_interval_hours = 6
+pruning_interval_hours     = 24
+snapshot_interval_hours    = 6
+
+[hdc]
+dimension    = 10000
+window_size  = 5
+tfidf        = true
+
+[ingest]
+chunk_size    = 5
+chunk_overlap = 1
+
+[llm]
+enabled         = false
+provider        = "ollama"
+model           = "cogito:8b"           # L2 extraction model
+embedding_model = "nomic-embed-text"    # neural embedding model
+endpoint        = "http://localhost:11434"
+timeout_ms      = 30000
+
+[mcp]
+transport = "stdio"
+tcp_port  = 3333
+
+# Domain vocabulary — accelerates L0/L1
+[domain.bioinformatics]
+entities  = ["ChromoQ", "EGFP", "GFP", "AlphaFold2", "luciferase", "PNPH"]
+relations = ["DERIVE_DE", "PREDIT_PAR", "EMET_A", "MUTANT_DE"]
+
+[domain.antsuite]
+entities  = ["SwarmOS", "AntOS", "MorphLang", "WAMR", "Unikraft", "KOLOSS"]
+relations = ["COMPILE_VERS", "DEPEND_DE", "REMPLACE", "INCOMPATIBLE"]
+
+[domain.panlunadra]
+entities  = ["ChromoQ", "PNPH", "panda-dragon", "biophotonique"]
+relations = ["INSPIRE_DE", "EXISTE_DANS", "ENCODE"]

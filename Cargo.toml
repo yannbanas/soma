@@ -1,0 +1,71 @@
+[workspace]
+members   = ["crates/*"]
+resolver  = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Yann Banas"]
+
+[workspace.dependencies]
+# Fondamentaux
+thiserror  = "2"
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid       = { version = "1", features = ["v4", "v5", "serde"] }
+chrono     = { version = "0.4", features = ["serde"] }
+once_cell  = "1"
+
+# Graphe
+petgraph   = { version = "0.6", features = ["serde-1"] }
+
+# HDC
+ndarray    = "0.16"
+rand       = "0.8"
+
+# Persistance
+bincode    = "2"
+zstd       = "0.13"
+
+# Async (soma-bio, soma-mcp uniquement)
+tokio      = { version = "1", features = ["full"] }
+
+# CLI
+clap       = { version = "4", features = ["derive"] }
+colored    = "2"
+
+# Extract
+regex      = "1"
+
+# HTTP (Ollama)
+reqwest    = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+
+# Config
+toml       = "0.8"
+
+# Logging
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Benchmark
+criterion    = { version = "0.5", features = ["html_reports"] }
+
+# Internes
+soma-core    = { path = "crates/soma-core" }
+soma-graph   = { path = "crates/soma-graph" }
+soma-hdc     = { path = "crates/soma-hdc" }
+soma-store   = { path = "crates/soma-store" }
+soma-bio     = { path = "crates/soma-bio" }
+soma-ingest  = { path = "crates/soma-ingest" }
+soma-llm     = { path = "crates/soma-llm" }
+soma-mcp     = { path = "crates/soma-mcp" }
+
+[profile.release]
+opt-level       = 3
+lto             = true
+codegen-units   = 1
+strip           = true
+
+[profile.dev]
+opt-level = 1   # ndarray inutilisable à opt-level=0

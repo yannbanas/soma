@@ -1,0 +1,15 @@
+[package]
+name = "soma-bio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "SOMA — Biological scheduler (evaporation, physarum, consolidation, pruning)"
+
+[dependencies]
+soma-core  = { workspace = true }
+soma-graph = { workspace = true }
+soma-store = { workspace = true }
+tokio      = { workspace = true }
+chrono     = { workspace = true }
+tracing    = { workspace = true }

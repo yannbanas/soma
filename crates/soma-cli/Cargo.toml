@@ -1,0 +1,37 @@
+[package]
+name = "soma-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "SOMA — Terminal interface + daemon (somad)"
+
+[[bin]]
+name = "soma"
+path = "src/main.rs"
+
+[dependencies]
+soma-core   = { workspace = true }
+soma-graph  = { workspace = true }
+soma-hdc    = { workspace = true }
+soma-store  = { workspace = true }
+soma-bio    = { workspace = true }
+soma-ingest = { workspace = true }
+soma-llm    = { workspace = true }
+soma-mcp    = { workspace = true }
+clap        = { workspace = true }
+colored     = { workspace = true }
+tokio       = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+chrono      = { workspace = true }
+tracing     = { workspace = true }
+tracing-subscriber = { workspace = true }
+toml        = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "ruler_bench"
+harness = false

@@ -1,0 +1,34 @@
+# Build
+/target/
+**/*.rs.bk
+.claude/*
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# SOMA data (user-specific)
+*.brain
+*.wal
+*.snapshot
+/data/
+
+# Environment
+.env
+.env.local
+
+# Benchmark output
+criterion/
+
+# Claude Code local settings
+.claude/
+
+SOMA_ARCHITECTURE.md
+SOMA_VISION.md

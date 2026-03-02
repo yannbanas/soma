@@ -1,0 +1,21 @@
+[package]
+name = "soma-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "SOMA — Native MCP server (stdio + TCP, 10 tools)"
+
+[dependencies]
+soma-core   = { workspace = true }
+soma-graph  = { workspace = true }
+soma-hdc    = { workspace = true }
+soma-store  = { workspace = true }
+soma-ingest = { workspace = true }
+soma-llm    = { workspace = true }
+tokio       = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+chrono      = { workspace = true }
+thiserror   = { workspace = true }
+tracing     = { workspace = true }
