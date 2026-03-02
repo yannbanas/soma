@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="logo_soma.png" alt="SOMA Logo" width="200"/>
+  <img src="logo_soma.png" alt="SOMA Logo"/>
 </p>
-
-<h1 align="center">SOMA</h1>
 
 <p align="center">
   <strong>Stigmergic Ontological Memory Architecture</strong><br/>
