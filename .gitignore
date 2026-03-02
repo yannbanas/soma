@@ -29,3 +29,7 @@ criterion/
 
 # Claude Code local settings
 .claude/
+
+# Internal docs (not published)
+SOMA_ARCHITECTURE.md
+SOMA_VISION.md
