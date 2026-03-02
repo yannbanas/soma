@@ -29,6 +29,3 @@ criterion/
 
 # Claude Code local settings
 .claude/
-
-SOMA_ARCHITECTURE.md
-SOMA_VISION.md

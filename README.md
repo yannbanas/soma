@@ -1,17 +1,32 @@
 <p align="center">
-  <h1 align="center">SOMA</h1>
-  <p align="center"><strong>Stigmergic Ontological Memory Architecture</strong></p>
-  <p align="center">
-    A persistent, biologically-inspired knowledge graph for AI agents.
-  </p>
-  <p align="center">
-    <a href="#quick-start">Quick Start</a> &bull;
-    <a href="#features">Features</a> &bull;
-    <a href="#architecture">Architecture</a> &bull;
-    <a href="#cli-reference">CLI</a> &bull;
-    <a href="#mcp-integration">MCP</a> &bull;
-    <a href="#configuration">Config</a>
-  </p>
+  <img src="logo_soma.png" alt="SOMA Logo" width="200"/>
+</p>
+
+<h1 align="center">SOMA</h1>
+
+<p align="center">
+  <strong>Stigmergic Ontological Memory Architecture</strong><br/>
+  A persistent, biologically-inspired knowledge graph for AI agents.
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"/></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-pure-orange.svg?logo=rust" alt="Rust"/></a>
+  <a href="#testing"><img src="https://img.shields.io/badge/tests-109%20passing-brightgreen.svg" alt="Tests: 109 passing"/></a>
+  <a href="#ruler-multi-needle-retrieval"><img src="https://img.shields.io/badge/RULER-10%2F10-brightgreen.svg" alt="RULER: 10/10"/></a>
+  <a href="#mcp-integration"><img src="https://img.shields.io/badge/MCP-10%20tools-8A2BE2.svg" alt="MCP: 10 tools"/></a>
+  <a href="#architecture"><img src="https://img.shields.io/badge/crates-9-blue.svg" alt="9 crates"/></a>
+  <img src="https://img.shields.io/badge/cloud%20dependencies-0-critical.svg" alt="Zero cloud deps"/>
+  <a href="#supported-platforms"><img src="https://img.shields.io/badge/platform-linux%20%7C%20windows%20%7C%20macos%20%7C%20wasm-lightgrey.svg" alt="Platforms"/></a>
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick Start</a> &bull;
+  <a href="#features">Features</a> &bull;
+  <a href="#architecture">Architecture</a> &bull;
+  <a href="#cli-reference">CLI</a> &bull;
+  <a href="#mcp-integration">MCP</a> &bull;
+  <a href="#configuration">Config</a>
 </p>
 
 ---
