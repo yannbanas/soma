@@ -26,6 +26,11 @@ desktop.ini
 
 # Benchmark output
 criterion/
+bench_results/
+
+# Benchmark datasets (too large for git — download separately)
+crates/soma-bench/data/*.json
+crates/soma-bench/data/*.jsonl
 
 # Claude Code local settings
 .claude/

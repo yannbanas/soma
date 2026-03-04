@@ -121,6 +121,37 @@ impl OllamaClient {
         parse_triplets_response(&gen_response.response)
     }
 
+    /// Batch embed multiple texts at once via /api/embed.
+    /// Returns vectors in the same order as input. Returns Ok(None) if disabled.
+    pub fn embed_batch(&self, texts: &[String]) -> Result<Option<Vec<Vec<f64>>>, LlmError> {
+        if !self.enabled || texts.is_empty() {
+            return Ok(None);
+        }
+
+        let request = OllamaBatchEmbedRequest {
+            model: self.embedding_model.clone(),
+            input: texts.to_vec(),
+        };
+
+        let url = format!("{}/api/embed", self.endpoint);
+
+        let response =
+            blocking_send(self.client.post(&url).json(&request)).map_err(|e| {
+                warn!("[llm] Ollama batch embed unreachable: {}", e);
+                LlmError::ConnectionFailed(e.to_string())
+            })?;
+
+        if !response.status().is_success() {
+            return Ok(None);
+        }
+
+        let emb_response: OllamaBatchEmbedResponse = response
+            .json()
+            .map_err(|e| LlmError::ParseError(e.to_string()))?;
+
+        Ok(Some(emb_response.embeddings))
+    }
+
     /// Get embedding vector for a text.
     /// Returns Ok(None) if disabled or unreachable.
     pub fn embed(&self, text: &str) -> Result<Option<Vec<f64>>, LlmError> {

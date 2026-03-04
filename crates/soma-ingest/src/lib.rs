@@ -1,10 +1,16 @@
 //! # soma-ingest — Universal Ingestion Pipeline
 //!
-//! Three-level extraction: L0 (heuristics), L1 (regex patterns), L2 (optional LLM).
+//! Four-level extraction:
+//! - L0: Heuristics (structured sources)
+//! - L1: Regex patterns (domain-specific)
+//! - L1.5: Automatic NER + co-occurrence (domain-agnostic)
+//! - L2: Optional LLM (Ollama)
+//!
 //! Supports: RawText, File, ClaudeConversation, OllamaSession, Structured data.
 //! Intelligent chunking with overlap for context preservation.
 
 mod chunker;
+pub mod ner;
 mod patterns;
 mod pipeline;
 mod source;

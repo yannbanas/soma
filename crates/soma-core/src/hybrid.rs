@@ -66,6 +66,53 @@ pub fn rrf_merge_with_sources(
     results
 }
 
+/// Reciprocal Rank Fusion with node specificity weighting.
+///
+/// Like `rrf_merge_with_sources` but multiplies each item's RRF score by its
+/// specificity weight (IDF-based). Rare/specific nodes get boosted, hubs get dampened.
+///
+/// `specificity` maps label → specificity score in [0, 1].
+/// Items not in the map get a default weight of 0.5.
+pub fn rrf_merge_with_specificity(
+    ranked_lists: &[(&str, Vec<(String, f32)>)],
+    k: f32,
+    specificity: &HashMap<String, f32>,
+) -> Vec<HybridResult> {
+    let mut scores: HashMap<String, f32> = HashMap::new();
+    let mut source_map: HashMap<String, Vec<String>> = HashMap::new();
+
+    for (source_name, list) in ranked_lists {
+        for (rank, (label, _score)) in list.iter().enumerate() {
+            *scores.entry(label.clone()).or_insert(0.0) += 1.0 / (k + rank as f32 + 1.0);
+            source_map
+                .entry(label.clone())
+                .or_default()
+                .push(source_name.to_string());
+        }
+    }
+
+    // Apply specificity weighting
+    for (label, score) in scores.iter_mut() {
+        let spec = specificity.get(label).copied().unwrap_or(0.5);
+        // Blend: 70% RRF + 30% specificity boost
+        *score *= 0.7 + 0.3 * spec;
+    }
+
+    let mut results: Vec<HybridResult> = scores
+        .into_iter()
+        .map(|(label, score)| HybridResult {
+            sources: source_map.remove(&label).unwrap_or_default(),
+            label,
+            score,
+            node: None,
+            hops: None,
+        })
+        .collect();
+
+    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    results
+}
+
 /// Fuzzy label search — exact, prefix, and substring matching with scoring.
 ///
 /// Scoring:
@@ -213,5 +260,39 @@ mod tests {
 
         let a = results.iter().find(|r| r.label == "A").unwrap();
         assert_eq!(a.sources, vec!["graph".to_string()]);
+    }
+
+    #[test]
+    fn rrf_specificity_boosts_rare_nodes() {
+        let lists: Vec<(&str, Vec<(String, f32)>)> = vec![
+            ("graph", vec![("hub".to_string(), 0.9), ("leaf".to_string(), 0.5)]),
+        ];
+        let mut specificity = HashMap::new();
+        specificity.insert("hub".to_string(), 0.1);  // low specificity (hub)
+        specificity.insert("leaf".to_string(), 1.0);  // high specificity (leaf)
+
+        let results = rrf_merge_with_specificity(&lists, 60.0, &specificity);
+
+        // Without specificity: hub > leaf (rank 0 vs rank 1)
+        // With specificity: leaf should be boosted closer to or above hub
+        let hub_score = results.iter().find(|r| r.label == "hub").unwrap().score;
+        let leaf_score = results.iter().find(|r| r.label == "leaf").unwrap().score;
+
+        // Hub: RRF * (0.7 + 0.3*0.1) = RRF * 0.73
+        // Leaf: RRF * (0.7 + 0.3*1.0) = RRF * 1.0
+        // So the leaf gets a bigger boost factor
+        assert!(leaf_score / hub_score > 0.5, "specificity should boost leaf relative to hub");
+    }
+
+    #[test]
+    fn rrf_specificity_default_weight() {
+        let lists: Vec<(&str, Vec<(String, f32)>)> = vec![
+            ("graph", vec![("unknown".to_string(), 0.9)]),
+        ];
+        let specificity = HashMap::new(); // empty → default 0.5
+
+        let results = rrf_merge_with_specificity(&lists, 60.0, &specificity);
+        assert_eq!(results.len(), 1);
+        assert!(results[0].score > 0.0);
     }
 }

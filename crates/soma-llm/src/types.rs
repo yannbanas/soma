@@ -45,3 +45,16 @@ pub struct OllamaEmbeddingRequest {
 pub struct OllamaEmbeddingResponse {
     pub embedding: Vec<f64>,
 }
+
+/// Request body for Ollama /api/embed endpoint (batch).
+#[derive(Debug, Serialize)]
+pub struct OllamaBatchEmbedRequest {
+    pub model: String,
+    pub input: Vec<String>,
+}
+
+/// Response from Ollama /api/embed endpoint (batch).
+#[derive(Debug, Deserialize)]
+pub struct OllamaBatchEmbedResponse {
+    pub embeddings: Vec<Vec<f64>>,
+}

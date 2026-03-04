@@ -19,4 +19,4 @@ pub use edge::StigreEdge;
 pub use query::{SomaQuery, QueryResult};
 pub use error::SomaError;
 pub use config::{SomaConfig, LlmSection};
-pub use hybrid::{rrf_merge, rrf_merge_with_sources, fuzzy_label_search, HybridResult};
+pub use hybrid::{rrf_merge, rrf_merge_with_sources, rrf_merge_with_specificity, fuzzy_label_search, HybridResult};

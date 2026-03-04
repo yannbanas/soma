@@ -171,8 +171,23 @@ enum Commands {
         /// Query for context retrieval
         query: String,
     },
+    /// Watch a directory and auto-ingest new/modified files
+    Watch {
+        /// Directory to watch
+        path: PathBuf,
+        /// Watch subdirectories recursively
+        #[arg(long)]
+        recursive: bool,
+        /// Debounce interval in seconds
+        #[arg(long, default_value = "2")]
+        interval: u64,
+    },
     /// Start daemon with biological scheduler
-    Daemon,
+    Daemon {
+        /// Enable REST API on this port (e.g. --http 8080)
+        #[arg(long)]
+        http: Option<u16>,
+    },
 }
 
 #[tokio::main]
@@ -322,7 +337,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Sleep => {
             eprintln!("{} Manual consolidation triggered", "◉".yellow());
-            eprintln!("  (auto-consolidation runs every 6h in daemon mode)");
+            let report = BioScheduler::consolidate_once(&graph, &store).await;
+            eprintln!("  Episodes found:   {}", report.episodes_found);
+            if let Some(ref concept) = report.concept_created {
+                eprintln!("  Concept created:  {}", concept.green());
+            } else {
+                eprintln!("  Concept created:  {} (need ≥3 episodes)", "none".dimmed());
+            }
+            eprintln!("  Edges created:    {}", report.edges_created);
+            eprintln!("  Edges pruned:     {}", report.edges_pruned);
+            eprintln!("  Orphans archived: {}", report.orphans_archived);
+            if let (Some(before), Some(after)) = (&report.stats_before, &report.stats_after) {
+                eprintln!(
+                    "  Nodes: {} → {}  Edges: {} → {}",
+                    before.nodes, after.nodes, before.edges, after.edges
+                );
+            }
+            if json_mode {
+                println!("{}", serde_json::to_string_pretty(&report).unwrap_or_default());
+            }
         }
         Commands::Embed { incremental } => {
             cmd_embed(&graph, &hdc, &store, &llm_client, incremental).await?;
@@ -365,8 +398,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             server.run_tcp(port).await?;
         }
-        Commands::Daemon => {
-            cmd_daemon(graph.clone(), hdc.clone(), store.clone(), &config).await?;
+        Commands::Watch { path, recursive, interval } => {
+            eprintln!("{} Watching {} (recursive={})", "◉".yellow(), path.display(), recursive);
+            let mut pipeline = IngestPipeline::default_config();
+            if let Some(ref llm) = llm_client {
+                pipeline = pipeline.with_llm(llm.clone());
+            }
+            let watcher = soma_watch::FileWatcher::new(path, recursive, interval);
+            watcher.run(graph.clone(), pipeline).await?;
+            save_snapshot(&graph, &hdc, &store).await?;
+        }
+        Commands::Daemon { http } => {
+            cmd_daemon(graph.clone(), hdc.clone(), store.clone(), &config, http, llm_client.clone()).await?;
         }
     }
 
@@ -617,44 +660,106 @@ async fn cmd_search(
         .map(|c| vec![c])
         .unwrap_or_default();
 
-    let q = SomaQuery::new(query)
-        .with_max_hops(max_hops)
-        .with_channels(channels)
-        .with_limit(limit);
-
     let g = graph.read().await;
     let start = std::time::Instant::now();
+    let all_labels = g.all_labels();
 
-    // Path 1: Graph BFS traverse
-    let graph_results = g.traverse(&q);
-    let graph_list: Vec<(String, f32)> = graph_results
-        .iter()
-        .map(|r| (r.node.label.clone(), r.score))
-        .collect();
+    // Extract query entities for seeding BFS + PPR
+    let query_entities = soma_graph::extract_query_entities(query);
+
+    // Path 1: Graph BFS traverse (multi-seed)
+    let mut graph_list: Vec<(String, f32)> = Vec::new();
+    let mut graph_results: Vec<soma_core::QueryResult> = Vec::new();
+    for entity in &query_entities {
+        let q = SomaQuery::new(entity)
+            .with_max_hops(max_hops)
+            .with_channels(channels.clone())
+            .with_limit(limit);
+        let results = g.traverse(&q);
+        for r in results {
+            if !graph_list.iter().any(|(l, _)| l == &r.node.label) {
+                graph_list.push((r.node.label.clone(), r.score));
+                graph_results.push(r);
+            }
+        }
+    }
+    // Also try fuzzy-matched labels as BFS seeds
+    for (seed_label, seed_score) in fuzzy_label_search(query, &all_labels, 3) {
+        if seed_score >= 0.5 {
+            let q = SomaQuery::new(&seed_label)
+                .with_max_hops(max_hops)
+                .with_channels(channels.clone())
+                .with_limit(limit);
+            let results = g.traverse(&q);
+            for r in results {
+                if !graph_list.iter().any(|(l, _)| l == &r.node.label) {
+                    graph_list.push((r.node.label.clone(), r.score));
+                    graph_results.push(r);
+                }
+            }
+        }
+    }
 
     if no_semantic {
         // Legacy mode: graph-only results
         let elapsed = start.elapsed();
+        // Re-create results for display
+        let q = SomaQuery::new(query).with_max_hops(max_hops).with_channels(channels).with_limit(limit);
+        let graph_results = g.traverse(&q);
         display_search_results(query, &graph_results, elapsed);
         return Ok(());
     }
 
-    // Path 2: HDC/Neural semantic search
-    let all_labels = g.all_labels();
+    // Path 2: HDC/Neural semantic search (per entity + full query)
     let h = hdc.read().await;
-    let hdc_list = h.search_labels(query, &all_labels, limit);
+    let mut hdc_list: Vec<(String, f32)> = h.search_labels(query, &all_labels, limit);
+    for entity in &query_entities {
+        for (label, score) in h.search_labels(entity, &all_labels, limit) {
+            if !hdc_list.iter().any(|(l, _)| l == &label) {
+                hdc_list.push((label, score));
+            }
+        }
+    }
+    hdc_list.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    hdc_list.truncate(limit);
 
-    // Path 3: Fuzzy label search
-    let fuzzy_list = fuzzy_label_search(query, &all_labels, limit);
+    // Path 3: Fuzzy label search (per entity)
+    let mut fuzzy_list: Vec<(String, f32)> = Vec::new();
+    for entity in &query_entities {
+        for (label, score) in fuzzy_label_search(entity, &all_labels, limit) {
+            if !fuzzy_list.iter().any(|(l, _)| l == &label) {
+                fuzzy_list.push((label, score));
+            }
+        }
+    }
+    fuzzy_list.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    fuzzy_list.truncate(limit);
+
+    // Path 4: Personalized PageRank
+    let mut ppr_seeds = query_entities;
+    for entity in &ppr_seeds.clone() {
+        for (label, score) in fuzzy_label_search(entity, &all_labels, 5) {
+            if score >= 0.7 && !ppr_seeds.contains(&label) {
+                ppr_seeds.push(label);
+            }
+        }
+    }
+    let ppr_results = g.ppr(&ppr_seeds, 0.15, 50, 1e-6, None);
+    let ppr_list: Vec<(String, f32)> = ppr_results
+        .iter()
+        .take(limit)
+        .map(|(_, l, s)| (l.clone(), *s))
+        .collect();
 
     drop(h);
     drop(g);
 
-    // RRF Merge with source tracking
+    // RRF Merge with source tracking (4 paths)
     let ranked_lists: Vec<(&str, Vec<(String, f32)>)> = vec![
         ("graph", graph_list),
         ("hdc", hdc_list),
         ("fuzzy", fuzzy_list),
+        ("ppr", ppr_list),
     ];
     let hybrid_results = rrf_merge_with_sources(&ranked_lists, 60.0);
     let elapsed = start.elapsed();
@@ -700,7 +805,7 @@ async fn cmd_search(
             final_results.len(),
             query,
             elapsed.as_secs_f64() * 1000.0,
-            "[hybrid: graph+hdc+fuzzy]".dimmed(),
+            "[hybrid: graph+hdc+fuzzy+ppr]".dimmed(),
         );
         for (i, r) in final_results.iter().enumerate() {
             let source_str = if r.sources.is_empty() {
@@ -1116,6 +1221,186 @@ async fn cmd_list(
     Ok(())
 }
 
+fn build_html_viz(g: &StigreGraph) -> Result<String, Box<dyn std::error::Error>> {
+    let now = Utc::now();
+
+    // Collect node data
+    let mut nodes_json = Vec::new();
+    let mut node_degrees: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+
+    // Count degrees
+    for edge in g.all_edges() {
+        if let (Some(from), Some(to)) = (g.get_node(edge.from), g.get_node(edge.to)) {
+            *node_degrees.entry(from.label.clone()).or_default() += 1;
+            *node_degrees.entry(to.label.clone()).or_default() += 1;
+        }
+    }
+
+    for node in g.all_nodes() {
+        let degree = node_degrees.get(&node.label).copied().unwrap_or(0);
+        nodes_json.push(serde_json::json!({
+            "id": node.label,
+            "kind": node.kind.as_str(),
+            "degree": degree,
+            "tags": node.tags,
+            "created": node.created_at.format("%Y-%m-%d %H:%M").to_string(),
+        }));
+    }
+
+    let mut edges_json = Vec::new();
+    for edge in g.all_edges() {
+        if let (Some(from), Some(to)) = (g.get_node(edge.from), g.get_node(edge.to)) {
+            edges_json.push(serde_json::json!({
+                "source": from.label,
+                "target": to.label,
+                "channel": edge.channel.to_string(),
+                "intensity": edge.effective_intensity(now),
+                "uses": edge.uses,
+            }));
+        }
+    }
+
+    let graph_data = serde_json::json!({
+        "nodes": nodes_json,
+        "links": edges_json,
+    });
+
+    let stats = g.stats();
+    let html = format!(r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOMA Graph — {workspace}</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{ background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; }}
+  #header {{ position: fixed; top: 0; left: 0; right: 0; padding: 12px 20px; background: rgba(26,26,46,0.9);
+             backdrop-filter: blur(10px); z-index: 10; display: flex; align-items: center; gap: 20px; }}
+  #header h1 {{ font-size: 18px; color: #7dd3fc; }}
+  #header .stat {{ font-size: 13px; color: #888; }}
+  #controls {{ position: fixed; top: 50px; left: 10px; z-index: 10; display: flex; flex-direction: column; gap: 6px; }}
+  #controls label {{ font-size: 12px; color: #aaa; }}
+  #controls select, #controls input {{ background: #16213e; border: 1px solid #333; color: #ddd; padding: 4px 8px;
+                                        border-radius: 4px; font-size: 12px; }}
+  #tooltip {{ position: fixed; background: rgba(22,33,62,0.95); border: 1px solid #7dd3fc; border-radius: 6px;
+              padding: 10px 14px; font-size: 12px; pointer-events: none; display: none; z-index: 20;
+              max-width: 300px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }}
+  #tooltip .kind {{ color: #7dd3fc; font-weight: bold; }}
+  svg {{ width: 100vw; height: 100vh; }}
+</style>
+</head>
+<body>
+<div id="header">
+  <h1>SOMA Graph</h1>
+  <span class="stat">Workspace: {workspace}</span>
+  <span class="stat">Nodes: {nodes}</span>
+  <span class="stat">Edges: {edges}</span>
+</div>
+<div id="controls">
+  <label>Kind Filter</label>
+  <select id="kindFilter">
+    <option value="all">All</option>
+    <option value="Entity">Entity</option>
+    <option value="Concept">Concept</option>
+    <option value="Event">Event</option>
+    <option value="Measurement">Measurement</option>
+    <option value="Warning">Warning</option>
+  </select>
+  <label>Min Intensity</label>
+  <input type="range" id="intensityFilter" min="0" max="1" step="0.05" value="0">
+  <span id="intensityVal">0.00</span>
+</div>
+<div id="tooltip"></div>
+<svg></svg>
+<script>
+const data = {graph_data};
+
+const kindColors = {{
+  "Entity": "#60a5fa",
+  "Concept": "#34d399",
+  "Event": "#fbbf24",
+  "Measurement": "#f87171",
+  "Warning": "#fb923c",
+}};
+
+const width = window.innerWidth;
+const height = window.innerHeight;
+
+const svg = d3.select("svg");
+const g = svg.append("g");
+
+svg.call(d3.zoom().on("zoom", (e) => g.attr("transform", e.transform)));
+
+const simulation = d3.forceSimulation(data.nodes)
+  .force("link", d3.forceLink(data.links).id(d => d.id).distance(80))
+  .force("charge", d3.forceManyBody().strength(-120))
+  .force("center", d3.forceCenter(width / 2, height / 2))
+  .force("collision", d3.forceCollide().radius(d => 4 + Math.sqrt(d.degree) * 2));
+
+const link = g.append("g").selectAll("line").data(data.links).join("line")
+  .attr("stroke", "#444")
+  .attr("stroke-width", d => 0.5 + d.intensity * 3)
+  .attr("stroke-opacity", d => 0.3 + d.intensity * 0.5);
+
+const node = g.append("g").selectAll("circle").data(data.nodes).join("circle")
+  .attr("r", d => 4 + Math.sqrt(d.degree) * 2)
+  .attr("fill", d => kindColors[d.kind] || "#888")
+  .attr("stroke", "#fff")
+  .attr("stroke-width", 0.5)
+  .call(d3.drag()
+    .on("start", (e, d) => {{ if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; }})
+    .on("drag", (e, d) => {{ d.fx = e.x; d.fy = e.y; }})
+    .on("end", (e, d) => {{ if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }}));
+
+const label = g.append("g").selectAll("text").data(data.nodes).join("text")
+  .text(d => d.degree >= 3 ? d.id.substring(0, 20) : "")
+  .attr("font-size", 9)
+  .attr("fill", "#aaa")
+  .attr("dx", 8)
+  .attr("dy", 3);
+
+const tooltip = d3.select("#tooltip");
+node.on("mouseover", (e, d) => {{
+  tooltip.style("display", "block")
+    .html(`<span class="kind">${{d.kind}}</span><br><b>${{d.id}}</b><br>Degree: ${{d.degree}}<br>Tags: ${{(d.tags || []).join(", ") || "-"}}<br>Created: ${{d.created}}`);
+}}).on("mousemove", (e) => {{
+  tooltip.style("left", (e.clientX + 15) + "px").style("top", (e.clientY - 10) + "px");
+}}).on("mouseout", () => tooltip.style("display", "none"));
+
+simulation.on("tick", () => {{
+  link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+  node.attr("cx", d => d.x).attr("cy", d => d.y);
+  label.attr("x", d => d.x).attr("y", d => d.y);
+}});
+
+// Filters
+d3.select("#kindFilter").on("change", applyFilters);
+d3.select("#intensityFilter").on("input", function() {{
+  d3.select("#intensityVal").text(parseFloat(this.value).toFixed(2));
+  applyFilters();
+}});
+
+function applyFilters() {{
+  const kind = d3.select("#kindFilter").property("value");
+  const minI = parseFloat(d3.select("#intensityFilter").property("value"));
+  node.style("display", d => (kind === "all" || d.kind === kind) ? null : "none");
+  label.style("display", d => (kind === "all" || d.kind === kind) ? null : "none");
+  link.style("display", d => d.intensity >= minI ? null : "none");
+}}
+</script>
+</body>
+</html>"##,
+        workspace = stats.workspace,
+        nodes = stats.nodes,
+        edges = stats.edges,
+        graph_data = serde_json::to_string(&graph_data)?,
+    );
+
+    Ok(html)
+}
+
 async fn cmd_export(
     graph: &Arc<RwLock<StigreGraph>>,
     format: &str,
@@ -1159,8 +1444,11 @@ async fn cmd_export(
             }
             lines.join("\n")
         }
+        "html" => {
+            build_html_viz(&g)?
+        }
         _ => {
-            return Err(format!("unknown export format: {} (use json, dot, csv)", format).into());
+            return Err(format!("unknown export format: {} (use json, dot, csv, html)", format).into());
         }
     };
 
@@ -1275,32 +1563,88 @@ async fn cmd_context(
     json_mode: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let g = graph.read().await;
-    let q = SomaQuery::new(query)
-        .with_max_hops(3)
-        .with_min_intensity(0.1)
-        .with_limit(20);
-
-    // Path 1: Graph BFS
-    let graph_results = g.traverse(&q);
-    let graph_list: Vec<(String, f32)> = graph_results
-        .iter()
-        .map(|r| (r.node.label.clone(), r.score))
-        .collect();
-
-    // Path 2: HDC/Neural
     let all_labels = g.all_labels();
+
+    // Extract query entities for seeding BFS + PPR
+    let query_entities = soma_graph::extract_query_entities(query);
+
+    // Path 1: Graph BFS (multi-seed)
+    let mut graph_list: Vec<(String, f32)> = Vec::new();
+    for entity in &query_entities {
+        let q = SomaQuery::new(entity)
+            .with_max_hops(3)
+            .with_min_intensity(0.1)
+            .with_limit(20);
+        let results = g.traverse(&q);
+        for r in &results {
+            if !graph_list.iter().any(|(l, _)| l == &r.node.label) {
+                graph_list.push((r.node.label.clone(), r.score));
+            }
+        }
+    }
+    for (seed_label, seed_score) in fuzzy_label_search(query, &all_labels, 3) {
+        if seed_score >= 0.5 {
+            let q = SomaQuery::new(&seed_label)
+                .with_max_hops(3)
+                .with_min_intensity(0.1)
+                .with_limit(20);
+            let results = g.traverse(&q);
+            for r in &results {
+                if !graph_list.iter().any(|(l, _)| l == &r.node.label) {
+                    graph_list.push((r.node.label.clone(), r.score));
+                }
+            }
+        }
+    }
+
+    // Path 2: HDC/Neural (per entity + full query)
     let h = hdc.read().await;
-    let hdc_list = h.search_labels(query, &all_labels, 20);
+    let mut hdc_list: Vec<(String, f32)> = h.search_labels(query, &all_labels, 20);
+    for entity in &query_entities {
+        for (label, score) in h.search_labels(entity, &all_labels, 20) {
+            if !hdc_list.iter().any(|(l, _)| l == &label) {
+                hdc_list.push((label, score));
+            }
+        }
+    }
+    hdc_list.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    hdc_list.truncate(20);
     drop(h);
 
-    // Path 3: Fuzzy
-    let fuzzy_list = fuzzy_label_search(query, &all_labels, 20);
+    // Path 3: Fuzzy (per entity)
+    let mut fuzzy_list: Vec<(String, f32)> = Vec::new();
+    for entity in &query_entities {
+        for (label, score) in fuzzy_label_search(entity, &all_labels, 20) {
+            if !fuzzy_list.iter().any(|(l, _)| l == &label) {
+                fuzzy_list.push((label, score));
+            }
+        }
+    }
+    fuzzy_list.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    fuzzy_list.truncate(20);
 
-    // RRF Merge
+    // Path 4: Personalized PageRank
+    let mut ppr_seeds = query_entities;
+    for entity in &ppr_seeds.clone() {
+        for (label, score) in fuzzy_label_search(entity, &all_labels, 5) {
+            if score >= 0.7 && !ppr_seeds.contains(&label) {
+                ppr_seeds.push(label);
+            }
+        }
+    }
+    let ppr_results = g.ppr(&ppr_seeds, 0.15, 50, 1e-6, None);
+    let ppr_list: Vec<(String, f32)> = ppr_results
+        .iter()
+        .take(20)
+        .map(|(_, l, s)| (l.clone(), *s))
+        .collect();
+
+    // RRF Merge (4 paths)
     let ranked_lists: Vec<(&str, Vec<(String, f32)>)> = vec![
         ("graph", graph_list),
         ("hdc", hdc_list),
         ("fuzzy", fuzzy_list),
+        ("ppr", ppr_list),
     ];
     let hybrid_results = rrf_merge_with_sources(&ranked_lists, 60.0);
 
@@ -1321,7 +1665,7 @@ async fn cmd_context(
         .collect();
 
     if !facts.is_empty() {
-        lines.push("Relevant facts (hybrid: graph+hdc+fuzzy):".to_string());
+        lines.push("Relevant facts (hybrid: graph+hdc+fuzzy+ppr):".to_string());
         for (node, hr) in &facts {
             let source_str = format!("[{}]", hr.sources.join("+"));
             lines.push(format!(
@@ -1362,6 +1706,8 @@ async fn cmd_daemon(
     hdc: Arc<RwLock<HdcEngine>>,
     store: Arc<RwLock<Store>>,
     config: &SomaConfig,
+    http_port: Option<u16>,
+    llm_client: Option<OllamaClient>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("{}", "═══ SOMA Daemon ═══".cyan().bold());
     eprintln!("  Biological scheduler: active");
@@ -1369,14 +1715,47 @@ async fn cmd_daemon(
     eprintln!("  Physarum:       every {}h", config.bio.physarum_interval_hours);
     eprintln!("  Consolidation:  every {}h", config.bio.consolidation_interval_hours);
     eprintln!("  Pruning:        every {}h", config.bio.pruning_interval_hours);
+    if let Some(port) = http_port {
+        eprintln!("  REST API:       http://0.0.0.0:{}", port);
+    }
     eprintln!("  Press Ctrl+C for graceful shutdown");
     eprintln!();
 
     let bio_config = BioConfig::from_soma_config(config);
     let scheduler = BioScheduler::new(bio_config);
 
-    // Run biological loops (returns on Ctrl+C)
-    scheduler.run(graph.clone(), store.clone()).await;
+    if let Some(port) = http_port {
+        // Build ToolHandler for HTTP (same one MCP uses)
+        let mut tool_handler = soma_mcp::ToolHandler::new(
+            graph.clone(),
+            hdc.clone(),
+            store.clone(),
+        );
+        if let Some(ref llm) = llm_client {
+            tool_handler = tool_handler.with_llm(llm.clone());
+        }
+        let http_server = soma_http::HttpServer::new(
+            Arc::new(tool_handler),
+            graph.clone(),
+            store.clone(),
+        );
+
+        // Run bio loops + HTTP server + Ctrl+C in parallel
+        tokio::select! {
+            _ = scheduler.run_loops(graph.clone(), store.clone()) => {},
+            result = http_server.run(port) => {
+                if let Err(e) = result {
+                    eprintln!("{} HTTP server error: {}", "✗".red(), e);
+                }
+            },
+            _ = tokio::signal::ctrl_c() => {
+                eprintln!("{} Graceful shutdown — Ctrl+C received", "→".cyan());
+            }
+        }
+    } else {
+        // Bio loops only (returns on Ctrl+C)
+        scheduler.run(graph.clone(), store.clone()).await;
+    }
 
     // Graceful shutdown: save final snapshot
     eprintln!("{} Saving final snapshot...", "→".cyan());

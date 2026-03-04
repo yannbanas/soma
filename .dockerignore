@@ -1,0 +1,9 @@
+target/
+.git/
+bench_results/
+python/
+*.md
+.claude/
+.dockerignore
+Dockerfile
+docker-compose.yml

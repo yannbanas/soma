@@ -3,6 +3,7 @@ use soma_graph::StigreGraph;
 use soma_llm::OllamaClient;
 
 use crate::chunker::Chunker;
+use crate::ner;
 use crate::patterns::{ExtractedTriplet, PatternExtractor};
 use crate::source::IngestSource;
 
@@ -118,6 +119,56 @@ impl IngestPipeline {
                 }
             }
 
+            // L1.5: Automatic NER — extract named entities and create co-occurrence edges
+            let entities = ner::extract_entities(chunk);
+            if entities.len() >= 2 {
+                // Create Entity nodes for each named entity
+                let entity_ids: Vec<_> = entities
+                    .iter()
+                    .map(|e| {
+                        let id = graph.upsert_node(&e.name, NodeKind::Entity);
+                        created_nodes.push(soma_core::SomaNode::new(
+                            &workspace,
+                            &e.name,
+                            NodeKind::Entity,
+                        ));
+                        total_nodes += 1;
+                        id
+                    })
+                    .collect();
+
+                // Connect co-occurring entities with Trail edges
+                for (i, j) in (0..entity_ids.len())
+                    .flat_map(|i| ((i + 1)..entity_ids.len()).map(move |j| (i, j)))
+                {
+                    if let Some(_) = graph.upsert_edge(
+                        entity_ids[i],
+                        entity_ids[j],
+                        Channel::Trail,
+                        0.5, // co-occurrence confidence
+                        source_tag,
+                    ) {
+                        total_edges += 1;
+                        created_edges.push(soma_core::StigreEdge::new(
+                            entity_ids[i],
+                            entity_ids[j],
+                            Channel::Trail,
+                            0.5,
+                            source_tag.to_string(),
+                        ));
+                    }
+                }
+            } else if entities.len() == 1 {
+                // Single entity — still create the node
+                graph.upsert_node(&entities[0].name, NodeKind::Entity);
+                created_nodes.push(soma_core::SomaNode::new(
+                    &workspace,
+                    &entities[0].name,
+                    NodeKind::Entity,
+                ));
+                total_nodes += 1;
+            }
+
             // L2: if L0+L1 yielded < 3 triplets on a long chunk, try LLM extraction
             if triplets.len() < 3 && chunk.len() > 50 {
                 if let Some(ref llm) = self.llm_client {
@@ -190,7 +241,14 @@ impl IngestPipeline {
 /// Create an Event node for a chunk that couldn't be extracted into triplets.
 fn create_event_node(graph: &mut StigreGraph, chunk: &str, source_tag: &str) -> soma_core::SomaNode {
     let label = if chunk.len() > 80 {
-        format!("{}...", &chunk[..77])
+        // Find a char boundary at or before byte 77
+        let end = chunk
+            .char_indices()
+            .take_while(|(i, _)| *i <= 77)
+            .last()
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        format!("{}...", &chunk[..end])
     } else {
         chunk.to_string()
     };

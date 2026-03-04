@@ -212,6 +212,11 @@ impl SomaConfig {
     /// Resolve data_dir: expand ~ to home directory.
     /// On Windows, also handles `~/.local/share/soma` → `%LOCALAPPDATA%\soma`.
     pub fn resolved_data_dir(&self) -> std::path::PathBuf {
+        // Environment variable override (for Docker, CI, etc.)
+        if let Ok(env_dir) = std::env::var("SOMA_DATA_DIR") {
+            return std::path::PathBuf::from(env_dir);
+        }
+
         let dir = &self.soma.data_dir;
 
         // On Windows, redirect Linux-style XDG paths to LOCALAPPDATA

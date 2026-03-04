@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "soma-memory"
+version = "0.1.0"
+description = "Python client for SOMA — Stigmergic Ontological Memory Architecture"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Yann Banas"}]
+requires-python = ">=3.9"
+dependencies = [
+    "httpx>=0.25",
+]
+
+[project.urls]
+Homepage = "https://github.com/yannbanas/soma"

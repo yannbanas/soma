@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 
@@ -213,16 +213,39 @@ impl StigreGraph {
     pub fn traverse(&self, query: &SomaQuery) -> Vec<QueryResult> {
         let now = Utc::now();
 
-        // Find start node
+        // Find start node — cascading resolution:
+        // 1. Exact case-sensitive match
+        // 2. Case-insensitive exact match
+        // 3. Label contains query (prefer shortest label)
+        // 4. Query contains label (prefer longest label, min 3 chars)
         let start_idx = match self.label_idx.get(&query.start) {
             Some(&idx) => idx,
             None => {
-                // Try fuzzy match (prefix)
-                match self.label_idx.iter().find(|(k, _)| {
-                    k.to_lowercase().contains(&query.start.to_lowercase())
-                }) {
-                    Some((_, &idx)) => idx,
-                    None => return Vec::new(),
+                let query_lower = query.start.to_lowercase();
+                if let Some((_, &idx)) = self
+                    .label_idx
+                    .iter()
+                    .find(|(k, _)| k.to_lowercase() == query_lower)
+                {
+                    idx
+                } else if let Some((_, &idx)) = self
+                    .label_idx
+                    .iter()
+                    .filter(|(k, _)| k.to_lowercase().contains(&query_lower))
+                    .min_by_key(|(k, _)| k.len())
+                {
+                    idx
+                } else if let Some((_, &idx)) = self
+                    .label_idx
+                    .iter()
+                    .filter(|(k, _)| {
+                        k.len() >= 3 && query_lower.contains(&k.to_lowercase())
+                    })
+                    .max_by_key(|(k, _)| k.len())
+                {
+                    idx
+                } else {
+                    return Vec::new();
                 }
             }
         };
@@ -461,6 +484,193 @@ impl StigreGraph {
         self.inner = graph;
         self.rebuild_indices();
     }
+
+    // ── Personalized PageRank ──────────────────────────────────
+
+    /// Personalized PageRank from seed nodes.
+    ///
+    /// Uses power iteration with edge weights = effective_intensity(now),
+    /// giving temporal awareness that static KGs lack.
+    ///
+    /// - `alpha`: teleport probability (typically 0.15)
+    /// - `max_iterations`: convergence limit (typically 50)
+    /// - `tolerance`: convergence threshold (typically 1e-6)
+    /// - `node_specificity`: optional IDF-based node weights for seed initialization
+    pub fn ppr(
+        &self,
+        seed_labels: &[String],
+        alpha: f32,
+        max_iterations: usize,
+        tolerance: f32,
+        node_specificity: Option<&HashMap<NodeId, f32>>,
+    ) -> Vec<(NodeId, String, f32)> {
+        let now = Utc::now();
+        let n = self.inner.node_count();
+        if n == 0 {
+            return Vec::new();
+        }
+
+        // Find seed node indices
+        let seed_indices: Vec<NodeIndex> = seed_labels
+            .iter()
+            .filter_map(|label| self.label_idx.get(label).copied())
+            .collect();
+
+        if seed_indices.is_empty() {
+            return Vec::new();
+        }
+
+        // Personalization vector
+        let mut personalization = vec![0.0f32; n];
+        for &idx in &seed_indices {
+            let weight = if let Some(spec) = node_specificity {
+                let node = &self.inner[idx];
+                spec.get(&node.id).copied().unwrap_or(1.0)
+            } else {
+                1.0
+            };
+            personalization[idx.index()] = weight;
+        }
+        // Normalize
+        let p_sum: f32 = personalization.iter().sum();
+        if p_sum > 0.0 {
+            for v in personalization.iter_mut() {
+                *v /= p_sum;
+            }
+        }
+
+        // Build sparse transition: for each node, outgoing (target_index, weight)
+        let mut out_weights: Vec<Vec<(usize, f32)>> = vec![Vec::new(); n];
+        let mut out_sums: Vec<f32> = vec![0.0; n];
+
+        for edge_ref in self.inner.edge_references() {
+            let u = edge_ref.source().index();
+            let v = edge_ref.target().index();
+            let w = edge_ref.weight().effective_intensity(now);
+            if w > 0.001 {
+                out_weights[u].push((v, w));
+                out_sums[u] += w;
+            }
+        }
+
+        // Power iteration
+        let mut rank = personalization.clone();
+        let mut new_rank = vec![0.0f32; n];
+
+        for _ in 0..max_iterations {
+            new_rank.fill(0.0);
+
+            // Propagation
+            for u in 0..n {
+                if rank[u] < 1e-10 || out_sums[u] < 1e-10 {
+                    continue;
+                }
+                let factor = (1.0 - alpha) * rank[u] / out_sums[u];
+                for &(v, w) in &out_weights[u] {
+                    new_rank[v] += factor * w;
+                }
+            }
+
+            // Teleport
+            for v in 0..n {
+                new_rank[v] += alpha * personalization[v];
+            }
+
+            // Convergence check
+            let diff: f32 = rank
+                .iter()
+                .zip(new_rank.iter())
+                .map(|(a, b)| (a - b).abs())
+                .sum();
+
+            std::mem::swap(&mut rank, &mut new_rank);
+
+            if diff < tolerance {
+                break;
+            }
+        }
+
+        // Collect non-zero results sorted by rank
+        let mut results: Vec<(NodeId, String, f32)> = self
+            .inner
+            .node_indices()
+            .filter(|&idx| rank[idx.index()] > 1e-8)
+            .map(|idx| {
+                let node = &self.inner[idx];
+                (node.id, node.label.clone(), rank[idx.index()])
+            })
+            .collect();
+
+        results.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+        results
+    }
+
+    // ── Node Specificity (IDF weighting) ───────────────────────
+
+    /// Compute IDF-based node specificity.
+    ///
+    /// `s_i = log(N / (1 + degree_i))` normalized to [0, 1].
+    /// Hub nodes (high degree) → low specificity.
+    /// Rare nodes (low degree) → high specificity.
+    pub fn node_specificity_idf(&self) -> HashMap<NodeId, f32> {
+        let n = self.inner.node_count() as f32;
+        if n == 0.0 {
+            return HashMap::new();
+        }
+        let now = Utc::now();
+        let mut specificity = HashMap::new();
+
+        for idx in self.inner.node_indices() {
+            let node = &self.inner[idx];
+            let out_deg = self
+                .inner
+                .edges(idx)
+                .filter(|e| e.weight().effective_intensity(now) > self.prune_threshold)
+                .count();
+            let in_deg = self
+                .inner
+                .edges_directed(idx, petgraph::Direction::Incoming)
+                .filter(|e| e.weight().effective_intensity(now) > self.prune_threshold)
+                .count();
+            let degree = out_deg + in_deg;
+            let idf = (n / (1.0 + degree as f32)).ln() + 1.0;
+            specificity.insert(node.id, idf);
+        }
+
+        // Normalize to [0, 1]
+        let max_spec = specificity.values().cloned().fold(0.0f32, f32::max);
+        if max_spec > 0.0 {
+            for v in specificity.values_mut() {
+                *v /= max_spec;
+            }
+        }
+
+        specificity
+    }
+
+    /// Node specificity keyed by label (for use with RRF merge).
+    pub fn node_specificity_by_label(&self) -> HashMap<String, f32> {
+        let id_map = self.node_specificity_idf();
+        let mut label_map = HashMap::new();
+        for node in self.all_nodes() {
+            if let Some(&spec) = id_map.get(&node.id) {
+                label_map.insert(node.label.clone(), spec);
+            }
+        }
+        label_map
+    }
+
+    // ── Temporal helpers ────────────────────────────────────────
+
+    /// Set the last_touch timestamp on all edges from a given source.
+    /// Used by temporal benchmarks to simulate time evolution.
+    pub fn set_edge_timestamps_for_source(&mut self, source: &str, timestamp: DateTime<Utc>) {
+        for edge in self.inner.edge_weights_mut() {
+            if edge.source == source {
+                edge.last_touch = timestamp;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -564,5 +774,92 @@ mod tests {
         let pruned = g.prune_dead_edges();
         assert_eq!(pruned, 1);
         assert_eq!(g.edge_count(), 0);
+    }
+
+    // ── PPR tests ──────────────────────────────────────────────
+
+    #[test]
+    fn ppr_basic_propagation() {
+        let mut g = StigreGraph::new("test", 0.05);
+        let a = g.upsert_node("Alice", NodeKind::Entity);
+        let b = g.upsert_node("Company", NodeKind::Entity);
+        let c = g.upsert_node("Industry", NodeKind::Entity);
+        g.upsert_edge(a, b, Channel::Trail, 0.9, "test");
+        g.upsert_edge(b, c, Channel::Trail, 0.9, "test");
+
+        let results = g.ppr(&["Alice".to_string()], 0.15, 50, 1e-6, None);
+        assert!(results.len() >= 2);
+        // Alice (seed) should have highest score
+        assert_eq!(results[0].1, "Alice");
+        // Company (1 hop) should rank above Industry (2 hops)
+        let company_pos = results.iter().position(|r| r.1 == "Company");
+        let industry_pos = results.iter().position(|r| r.1 == "Industry");
+        assert!(company_pos.is_some());
+        assert!(industry_pos.is_some());
+        assert!(company_pos.unwrap() < industry_pos.unwrap());
+    }
+
+    #[test]
+    fn ppr_multi_seed() {
+        let mut g = StigreGraph::new("test", 0.05);
+        let a = g.upsert_node("A", NodeKind::Entity);
+        let b = g.upsert_node("B", NodeKind::Entity);
+        let c = g.upsert_node("C", NodeKind::Entity);
+        g.upsert_edge(a, c, Channel::Trail, 0.9, "test");
+        g.upsert_edge(b, c, Channel::Trail, 0.9, "test");
+
+        let results = g.ppr(
+            &["A".to_string(), "B".to_string()],
+            0.15, 50, 1e-6, None,
+        );
+        // C should be found (reachable from both seeds)
+        assert!(results.iter().any(|r| r.1 == "C"));
+    }
+
+    #[test]
+    fn ppr_empty_seeds() {
+        let mut g = StigreGraph::new("test", 0.05);
+        g.upsert_node("X", NodeKind::Entity);
+        let results = g.ppr(&["nonexistent".to_string()], 0.15, 50, 1e-6, None);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn ppr_empty_graph() {
+        let g = StigreGraph::new("test", 0.05);
+        let results = g.ppr(&["A".to_string()], 0.15, 50, 1e-6, None);
+        assert!(results.is_empty());
+    }
+
+    // ── Node specificity tests ─────────────────────────────────
+
+    #[test]
+    fn node_specificity_hub_vs_leaf() {
+        let mut g = StigreGraph::new("test", 0.01);
+        let hub = g.upsert_node("hub", NodeKind::Entity);
+        let leaf1 = g.upsert_node("leaf1", NodeKind::Entity);
+        let leaf2 = g.upsert_node("leaf2", NodeKind::Entity);
+        let leaf3 = g.upsert_node("leaf3", NodeKind::Entity);
+        let isolated = g.upsert_node("isolated", NodeKind::Entity);
+
+        g.upsert_edge(hub, leaf1, Channel::Trail, 0.8, "test");
+        g.upsert_edge(hub, leaf2, Channel::Trail, 0.8, "test");
+        g.upsert_edge(hub, leaf3, Channel::Trail, 0.8, "test");
+
+        let spec = g.node_specificity_idf();
+        let hub_spec = spec[&hub];
+        let leaf_spec = spec[&leaf1];
+        let iso_spec = spec[&isolated];
+
+        // Isolated (degree 0) > leaf (degree 1) > hub (degree 3)
+        assert!(iso_spec > hub_spec, "isolated={} should > hub={}", iso_spec, hub_spec);
+        assert!(leaf_spec > hub_spec, "leaf={} should > hub={}", leaf_spec, hub_spec);
+    }
+
+    #[test]
+    fn node_specificity_empty_graph() {
+        let g = StigreGraph::new("test", 0.05);
+        let spec = g.node_specificity_idf();
+        assert!(spec.is_empty());
     }
 }

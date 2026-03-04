@@ -2,12 +2,25 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
+use serde::Serialize;
 use tokio::sync::RwLock;
 use tracing::info;
 
 use soma_core::{Channel, NodeKind};
-use soma_graph::StigreGraph;
+use soma_graph::{GraphStats, StigreGraph};
 use soma_store::Store;
+
+/// Report from a single consolidation pass.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ConsolidationReport {
+    pub episodes_found: usize,
+    pub concept_created: Option<String>,
+    pub edges_created: usize,
+    pub edges_pruned: usize,
+    pub orphans_archived: usize,
+    pub stats_before: Option<GraphStats>,
+    pub stats_after: Option<GraphStats>,
+}
 
 /// Configuration for biological scheduler intervals.
 #[derive(Debug, Clone)]
@@ -65,21 +78,110 @@ impl BioScheduler {
         graph: Arc<RwLock<StigreGraph>>,
         store: Arc<RwLock<Store>>,
     ) {
-        let config = self.config.clone();
-
         tokio::select! {
-            _ = async {
-                tokio::join!(
-                    Self::evaporation_watchdog(graph.clone(), config.clone()),
-                    Self::physarum_reshape(graph.clone(), config.clone()),
-                    Self::sleep_consolidation(graph.clone(), store.clone(), config.clone()),
-                    Self::daily_pruning(graph.clone(), store.clone(), config),
-                );
-            } => {},
+            _ = self.run_loops(graph.clone(), store.clone()) => {},
             _ = tokio::signal::ctrl_c() => {
                 info!("[bio] Graceful shutdown — Ctrl+C received");
             }
         }
+    }
+
+    /// Run all 4 biological loops without handling Ctrl+C.
+    /// Use this when the caller manages shutdown (e.g., daemon with HTTP server).
+    pub async fn run_loops(
+        &self,
+        graph: Arc<RwLock<StigreGraph>>,
+        store: Arc<RwLock<Store>>,
+    ) {
+        let config = self.config.clone();
+        tokio::join!(
+            Self::evaporation_watchdog(graph.clone(), config.clone()),
+            Self::physarum_reshape(graph.clone(), config.clone()),
+            Self::sleep_consolidation(graph.clone(), store.clone(), config.clone()),
+            Self::daily_pruning(graph.clone(), store.clone(), config),
+        );
+    }
+
+    /// Run a single consolidation + pruning pass and return a report.
+    pub async fn consolidate_once(
+        graph: &Arc<RwLock<StigreGraph>>,
+        store: &Arc<RwLock<Store>>,
+    ) -> ConsolidationReport {
+        let mut report = ConsolidationReport::default();
+
+        let mut g = graph.write().await;
+        report.stats_before = Some(g.stats());
+
+        let now = Utc::now();
+        let six_hours_ago = now - chrono::Duration::hours(6);
+
+        // Find recent Episodic nodes
+        let recent_episodes: Vec<(soma_core::NodeId, String)> = g
+            .all_nodes()
+            .filter(|n| n.kind == NodeKind::Event && n.created_at >= six_hours_ago)
+            .map(|n| (n.id, n.label.clone()))
+            .collect();
+
+        report.episodes_found = recent_episodes.len();
+
+        if recent_episodes.len() >= 3 {
+            let concept_label = format!("consolidated_{}", now.format("%Y%m%d_%H%M"));
+            let concept_id = g.upsert_node(&concept_label, NodeKind::Concept);
+
+            let mut created_edges = Vec::new();
+            for (episode_id, _label) in &recent_episodes {
+                if let Some(_eid) = g.upsert_edge(
+                    *episode_id,
+                    concept_id,
+                    Channel::DerivesDe,
+                    0.7,
+                    "bio:consolidation",
+                ) {
+                    created_edges.push(soma_core::StigreEdge::new(
+                        *episode_id,
+                        concept_id,
+                        Channel::DerivesDe,
+                        0.7,
+                        "bio:consolidation".to_string(),
+                    ));
+                }
+            }
+
+            report.concept_created = Some(concept_label.clone());
+            report.edges_created = created_edges.len();
+
+            // WAL
+            {
+                let mut s = store.write().await;
+                let concept_node =
+                    soma_core::SomaNode::new(g.workspace(), &concept_label, NodeKind::Concept);
+                let _ = s.write_wal(&soma_store::WalEntry::NodeUpsert(concept_node));
+                for edge in &created_edges {
+                    let _ = s.write_wal(&soma_store::WalEntry::EdgeUpsert(edge.clone()));
+                }
+                let _ = s.write_wal(&soma_store::WalEntry::ConsolidationEvent {
+                    ts: now,
+                    episodes_merged: created_edges.len() as u32,
+                    concepts_created: 1,
+                });
+            }
+        }
+
+        // Pruning pass
+        report.edges_pruned = g.prune_dead_edges();
+        report.orphans_archived = g.archive_orphans().len();
+
+        // WAL for archived nodes
+        if report.orphans_archived > 0 {
+            let archived = g.archive_orphans();
+            let mut s = store.write().await;
+            for node_id in &archived {
+                let _ = s.write_wal(&soma_store::WalEntry::NodeArchive(*node_id));
+            }
+        }
+
+        report.stats_after = Some(g.stats());
+        report
     }
 
     /// Evaporation watchdog (1h interval).

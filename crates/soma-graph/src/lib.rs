@@ -9,3 +9,4 @@ mod stats;
 
 pub use graph::StigreGraph;
 pub use stats::GraphStats;
+pub use traversal::extract_query_entities;

@@ -174,6 +174,36 @@ fn bench_stats(c: &mut Criterion) {
     });
 }
 
+fn bench_ppr_chain(c: &mut Criterion) {
+    let mut group = c.benchmark_group("graph/ppr_chain");
+    for size in [100, 500, 1000, 5000] {
+        let g = build_chain_graph(size);
+        group.bench_with_input(BenchmarkId::from_parameter(size), &g, |b, g| {
+            let seeds = vec!["node_0".to_string()];
+            b.iter(|| {
+                let results = g.ppr(black_box(&seeds), 0.15, 50, 1e-6, None);
+                black_box(results.len());
+            });
+        });
+    }
+    group.finish();
+}
+
+fn bench_ppr_star(c: &mut Criterion) {
+    let mut group = c.benchmark_group("graph/ppr_star");
+    for leaves in [50, 200, 1000] {
+        let g = build_star_graph(leaves);
+        group.bench_with_input(BenchmarkId::from_parameter(leaves), &g, |b, g| {
+            let seeds = vec!["hub".to_string()];
+            b.iter(|| {
+                let results = g.ppr(black_box(&seeds), 0.15, 50, 1e-6, None);
+                black_box(results.len());
+            });
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_upsert_node,
@@ -184,5 +214,7 @@ criterion_group!(
     bench_traverse_dense,
     bench_prune_dead_edges,
     bench_stats,
+    bench_ppr_chain,
+    bench_ppr_star,
 );
 criterion_main!(benches);

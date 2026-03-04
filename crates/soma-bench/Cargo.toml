@@ -1,0 +1,22 @@
+[package]
+name = "soma-bench"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "SOMA — Academic benchmark suite (MuSiQue, HotpotQA, temporal)"
+
+[[bin]]
+name = "bench_all"
+path = "src/bin/bench_all.rs"
+
+[dependencies]
+soma-core   = { workspace = true }
+soma-graph  = { workspace = true }
+soma-hdc    = { workspace = true }
+soma-ingest = { workspace = true }
+soma-llm    = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+chrono      = { workspace = true }
+tracing     = { workspace = true }
