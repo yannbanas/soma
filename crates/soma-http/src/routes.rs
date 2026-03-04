@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use axum::{
     Json, Router,
     extract::{Query, State},
@@ -5,17 +7,23 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
+use chrono::Utc;
 use serde::Deserialize;
 use serde_json::json;
 
 use crate::AppState;
 
+/// Dashboard HTML embedded at compile time.
+const DASHBOARD_HTML: &str = include_str!("../dashboard.html");
+
 pub fn build_router(state: AppState) -> Router {
     Router::new()
+        .route("/", get(dashboard))
         .route("/health", get(health))
         .route("/stats", get(stats))
         .route("/search", get(search))
         .route("/context", get(context))
+        .route("/api/graph", get(graph_data))
         .route("/add", post(add))
         .route("/ingest", post(ingest))
         .route("/relate", post(relate))
@@ -24,6 +32,56 @@ pub fn build_router(state: AppState) -> Router {
         .route("/forget", post(forget))
         .route("/sleep", post(sleep))
         .with_state(state)
+}
+
+// ── Dashboard ──────────────────────────────────────────────────────
+
+async fn dashboard() -> impl IntoResponse {
+    (
+        [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        DASHBOARD_HTML,
+    )
+}
+
+// ── Graph Data (for D3 visualization) ──────────────────────────────
+
+async fn graph_data(State(state): State<AppState>) -> impl IntoResponse {
+    let g = state.graph.read().await;
+    let now = Utc::now();
+
+    // Count degrees
+    let mut degrees: HashMap<String, usize> = HashMap::new();
+    for edge in g.all_edges() {
+        if let (Some(from), Some(to)) = (g.get_node(edge.from), g.get_node(edge.to)) {
+            *degrees.entry(from.label.clone()).or_default() += 1;
+            *degrees.entry(to.label.clone()).or_default() += 1;
+        }
+    }
+
+    let nodes: Vec<_> = g.all_nodes().map(|n| {
+        let degree = degrees.get(&n.label).copied().unwrap_or(0);
+        json!({
+            "id": n.label,
+            "kind": n.kind.as_str(),
+            "degree": degree,
+            "tags": n.tags,
+            "created": n.created_at.format("%Y-%m-%d %H:%M").to_string(),
+        })
+    }).collect();
+
+    let links: Vec<_> = g.all_edges().filter_map(|e| {
+        let from = g.get_node(e.from)?;
+        let to = g.get_node(e.to)?;
+        Some(json!({
+            "source": from.label,
+            "target": to.label,
+            "channel": e.channel.to_string(),
+            "intensity": e.effective_intensity(now),
+            "uses": e.uses,
+        }))
+    }).collect();
+
+    Json(json!({ "nodes": nodes, "links": links }))
 }
 
 // ── Health ──────────────────────────────────────────────────────────

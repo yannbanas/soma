@@ -10,10 +10,10 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"/></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-pure-orange.svg?logo=rust" alt="Rust"/></a>
-  <a href="#testing"><img src="https://img.shields.io/badge/tests-109%20passing-brightgreen.svg" alt="Tests: 109 passing"/></a>
+  <a href="#testing"><img src="https://img.shields.io/badge/tests-148%20passing-brightgreen.svg" alt="Tests: 148 passing"/></a>
   <a href="#ruler-multi-needle-retrieval"><img src="https://img.shields.io/badge/RULER-10%2F10-brightgreen.svg" alt="RULER: 10/10"/></a>
   <a href="#mcp-integration"><img src="https://img.shields.io/badge/MCP-10%20tools-8A2BE2.svg" alt="MCP: 10 tools"/></a>
-  <a href="#architecture"><img src="https://img.shields.io/badge/crates-9-blue.svg" alt="9 crates"/></a>
+  <a href="#architecture"><img src="https://img.shields.io/badge/crates-13-blue.svg" alt="13 crates"/></a>
   <img src="https://img.shields.io/badge/cloud%20dependencies-0-critical.svg" alt="Zero cloud deps"/>
   <a href="#supported-platforms"><img src="https://img.shields.io/badge/platform-linux%20%7C%20windows%20%7C%20macos%20%7C%20wasm-lightgrey.svg" alt="Platforms"/></a>
 </p>
@@ -23,7 +23,10 @@
   <a href="#features">Features</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
   <a href="#cli-reference">CLI</a> &bull;
+  <a href="#rest-api">REST API</a> &bull;
   <a href="#mcp-integration">MCP</a> &bull;
+  <a href="#docker">Docker</a> &bull;
+  <a href="#python-client">Python</a> &bull;
   <a href="#configuration">Config</a>
 </p>
 
@@ -55,13 +58,18 @@ One tool. All your memory. Fully local.
 - **Biological Scheduler** -- Four async background loops model real neural processes: synaptic evaporation, Physarum-inspired path optimization, sleep consolidation, and pruning.
 - **Crash-Safe Persistence** -- Append-only WAL with `fsync` on every write, plus zstd-compressed snapshots with atomic rename. No data loss on crash or power failure.
 - **MCP Protocol** -- 10 tools over JSON-RPC 2.0 (stdio or TCP) for seamless AI agent integration.
+- **REST API** -- 13 HTTP endpoints (axum) exposing every operation. Start with `soma daemon --http 8080`.
+- **Web Dashboard** -- Built-in D3.js force-directed graph visualization at `http://localhost:8080/`.
+- **Watch Mode** -- Auto-ingest files on change with `soma daemon --watch ./notes`. Supports `.txt`, `.md`, `.json`, `.csv`, `.rs`, `.py`, and more.
 - **Complete CLI** -- 13 commands with `--format json` output for scripting and pipelines.
+- **Docker Ready** -- Multi-stage Alpine image, single binary, `docker compose up` and go.
+- **Python Client** -- `soma-memory` package wraps the REST API with a clean Pythonic interface.
 - **Graceful Shutdown** -- The daemon catches `Ctrl+C` and writes a final snapshot before exiting.
 - **Config Validation** -- Invalid settings are caught and rejected at startup with clear error messages.
 
 ## Quick Start
 
-### Install
+### Install from Source
 
 ```bash
 git clone https://github.com/yannbanas/soma.git
@@ -70,6 +78,14 @@ cargo build --release
 ```
 
 The binary is at `target/release/soma` (or `soma.exe` on Windows).
+
+### Install with Docker
+
+```bash
+docker compose up -d
+# REST API is now available at http://localhost:8080
+curl http://localhost:8080/health
+```
 
 ### Basic Usage
 
@@ -129,7 +145,14 @@ soma show ChromoQ --format json
 Start the biological scheduler as a long-running process. It handles evaporation, consolidation, and pruning in the background. Press `Ctrl+C` for a graceful shutdown with a final snapshot.
 
 ```bash
+# Bio scheduler only
 soma daemon
+
+# Bio scheduler + REST API on port 8080
+soma daemon --http 8080
+
+# Bio scheduler + REST API + auto-ingest on file changes
+soma daemon --http 8080 --watch ./notes --recursive
 ```
 
 ### MCP Server
@@ -146,7 +169,7 @@ soma mcp-tcp --port 3333
 
 ## Architecture
 
-SOMA is organized as a Cargo workspace with 9 crates:
+SOMA is organized as a Cargo workspace with 13 crates:
 
 ```
 soma-core       Core types, IDs, channels, config, hybrid search (RRF)
@@ -157,21 +180,24 @@ soma-bio        Biological scheduler (evaporation, Physarum, consolidation, prun
 soma-ingest     Text chunker + L0/L1 pattern extraction + L2 Ollama pipeline
 soma-llm        Ollama HTTP client for generation and embeddings
 soma-mcp        MCP server (stdio + TCP, 10 tools)
+soma-http       REST API server (axum, 11 endpoints)
+soma-watch      File watcher for auto-ingest on change (notify)
+soma-bench      Benchmark suite (RULER, MuSiQue, HotpotQA, ablation)
 soma-cli        CLI frontend (13 commands) + daemon entry point
 ```
 
 ### Dependency Graph
 
 ```
-soma-cli ─→ soma-mcp ─→ soma-core
-   │            │
-   ├─→ soma-bio │
-   │      │     │
-   │      ▼     ▼
-   ├─→ soma-graph ←─ soma-ingest ─→ soma-llm
+soma-cli ──→ soma-http ──→ soma-mcp ──→ soma-core
+   │              │            │
+   ├─→ soma-watch │  soma-bio  │
+   │      │       │    │       │
+   │      ▼       ▼    ▼       ▼
+   ├─→ soma-graph ←── soma-ingest ──→ soma-llm
    │      │                │
    │      ▼                ▼
-   └─→ soma-store      soma-hdc
+   └─→ soma-store       soma-hdc       soma-bench
 ```
 
 ## CLI Reference
@@ -237,6 +263,140 @@ Add to your `.mcp.json`:
     }
   }
 }
+```
+
+## REST API
+
+Start the daemon with `--http` to expose the REST API:
+
+```bash
+soma daemon --http 8080
+```
+
+| Method | Endpoint     | Description                          |
+|--------|-------------|--------------------------------------|
+| GET    | `/`          | Web dashboard (D3.js graph viz)      |
+| GET    | `/health`    | Server health + uptime + graph size  |
+| GET    | `/stats`     | Full graph statistics                |
+| GET    | `/search`    | Hybrid search (`?q=...&limit=20`)    |
+| GET    | `/context`   | LLM-ready context block (`?q=...`)   |
+| GET    | `/api/graph` | Full graph data for visualization    |
+| POST   | `/add`       | Add text to memory                   |
+| POST   | `/ingest`    | Ingest a file by path                |
+| POST   | `/relate`    | Create a typed relation              |
+| POST   | `/reinforce` | Strengthen an edge                   |
+| POST   | `/alarm`     | Attach a warning to an entity        |
+| POST   | `/forget`    | Archive (soft-delete) an entity      |
+| POST   | `/sleep`     | Trigger manual consolidation         |
+
+```bash
+# Examples
+curl http://localhost:8080/health
+curl "http://localhost:8080/search?q=ChromoQ&limit=5"
+curl -X POST http://localhost:8080/add \
+  -H "Content-Type: application/json" \
+  -d '{"content": "EGFP emits green fluorescence", "tags": ["protein"]}'
+```
+
+## Web Dashboard
+
+SOMA includes a built-in web dashboard with a D3.js force-directed graph visualization. Access it at `http://localhost:8080/` when the daemon is running with `--http`.
+
+- **Interactive graph** -- Drag, zoom, and click nodes to explore your knowledge graph
+- **Real-time stats** -- Node count, edge count, uptime, and connection status
+- **Search** -- Full hybrid search from the sidebar with result highlighting
+- **Add knowledge** -- Create nodes, relations, and alarms directly from the UI
+- **Filters** -- Toggle node types and set minimum intensity thresholds
+- **Detail panel** -- Click any node to see its kind, tags, edges, and actions (reinforce / forget)
+- **Edge labels** -- Channel name and intensity displayed on each relation
+- **Export** -- Download the graph as JSON, DOT, or CSV
+- **Dark theme** -- Modern dark UI with color-coded node types and channels
+- **Tools** -- Trigger sleep consolidation and refresh the graph
+
+```bash
+soma daemon --http 8080
+# Open http://localhost:8080 in your browser
+```
+
+## Docker
+
+### Quick Start
+
+```bash
+docker compose up -d
+```
+
+This starts SOMA with:
+- REST API on port **8080**
+- MCP TCP on port **4242**
+- Persistent data volume `soma-data`
+
+### Build Manually
+
+```bash
+docker build -t soma .
+docker run -d -p 8080:8080 -v soma-data:/data soma
+```
+
+### docker-compose.yml
+
+```yaml
+services:
+  soma:
+    build: .
+    ports:
+      - "8080:8080"   # REST API
+      - "4242:4242"   # MCP TCP
+    volumes:
+      - soma-data:/data
+    environment:
+      - SOMA_DATA_DIR=/data
+      - RUST_LOG=info
+    restart: unless-stopped
+
+volumes:
+  soma-data:
+```
+
+## Python Client
+
+The `soma-memory` package provides a Python client for the REST API.
+
+### Install
+
+```bash
+pip install ./python/soma-memory
+```
+
+### Usage
+
+```python
+from soma_memory import SomaClient
+
+with SomaClient("http://localhost:8080") as s:
+    # Add knowledge
+    s.add("CRISPR edits gene X", source="paper", tags=["bio"])
+
+    # Search
+    results = s.search("gene editing", limit=10)
+
+    # Get LLM context
+    ctx = s.context("gene editing pipeline")
+
+    # Create relations
+    s.relate("CRISPR", "gene_X", channel="causal", confidence=0.9)
+
+    # Reinforce, alarm, forget
+    s.reinforce("CRISPR", "gene_X")
+    s.alarm("gene_X", reason="off-target effects reported")
+    s.forget("old-experiment")
+
+    # Trigger consolidation
+    s.sleep()
+
+    # Health & stats
+    print(s.health())
+    print(s.stats())
 ```
 
 ## Channel Types
@@ -314,18 +474,19 @@ The [RULER benchmark](https://arxiv.org/abs/2404.06654) tests retrieval of 10 "n
 
 ## Testing
 
-109 tests across all crates:
+148 tests across all crates:
 
 ```bash
-cargo test                                  # run all 109 tests
-cargo test -p soma-core                     # 39 tests — types, channels, config, hybrid search
-cargo test -p soma-ingest                   # 18 tests — chunker, pattern extraction
-cargo test -p soma-cli --test ruler_test    # 13 tests — RULER integration
+cargo test                                  # run all 148 tests
+cargo test -p soma-core                     # 41 tests — types, channels, config, hybrid search
+cargo test -p soma-bench                    # 30 tests — benchmark metrics, loaders, runners
+cargo test -p soma-ingest                   # 24 tests — chunker, NER, pattern extraction
+cargo test -p soma-graph                    # 19 tests — graph operations, traversal
 cargo test -p soma-hdc                      # 11 tests — HDC + neural embeddings
 cargo test -p soma-llm                      # 11 tests — Ollama client
 cargo test -p soma-store                    #  8 tests — WAL + snapshots
-cargo test -p soma-graph                    #  7 tests — graph operations
 cargo test -p soma-bio                      #  2 tests — scheduler
+cargo test -p soma-watch                    #  1 test  — file extension filtering
 ```
 
 ## Supported Platforms

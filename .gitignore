@@ -20,6 +20,12 @@ desktop.ini
 *.snapshot
 /data/
 
+# Python build artifacts
+*.egg-info/
+dist/
+__pycache__/
+*.pyc
+
 # Environment
 .env
 .env.local

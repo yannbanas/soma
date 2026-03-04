@@ -7,7 +7,7 @@ name = "soma-memory"
 version = "0.1.0"
 description = "Python client for SOMA — Stigmergic Ontological Memory Architecture"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 authors = [{name = "Yann Banas"}]
 requires-python = ">=3.9"
 dependencies = [
