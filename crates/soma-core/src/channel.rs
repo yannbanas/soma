@@ -19,6 +19,8 @@ pub enum Channel {
     Alarm,
     /// Semantic similarity computed by soma-hdc (auto-generated)
     SemanticSim,
+    /// Reasoning step — fast decay (~12h), for Graph of Thoughts
+    Reasoning,
     /// Custom channel declared in soma.toml
     Custom(u16),
 }
@@ -35,6 +37,7 @@ impl Channel {
             Channel::Alarm       => 0.005,   // slow (~8 days — errors persist)
             Channel::SemanticSim => 0.02,    // moderate (~2 days)
             Channel::Episodic    => 0.05,    // fast (~20h)
+            Channel::Reasoning   => 0.08,    // very fast (~12h)
             Channel::Custom(_)   => 0.01,
         }
     }
@@ -48,6 +51,7 @@ impl Channel {
             Channel::Alarm       => 0.35,  // errors strengthen if repeated
             Channel::Trail       => 0.30,
             Channel::SemanticSim => 0.20,
+            Channel::Reasoning   => 0.15,
             Channel::Episodic    => 0.10,
             Channel::Custom(_)   => 0.20,
         }
@@ -68,6 +72,7 @@ impl Channel {
             "episodic"     => Some(Channel::Episodic),
             "alarm"        => Some(Channel::Alarm),
             "semantic_sim" | "semanticsim" => Some(Channel::SemanticSim),
+            "reasoning"    => Some(Channel::Reasoning),
             _ => {
                 // Try parsing "custom:NNN"
                 if let Some(n) = s.strip_prefix("custom:") {
@@ -88,6 +93,7 @@ impl Channel {
             Channel::Episodic    => "episodic",
             Channel::Alarm       => "alarm",
             Channel::SemanticSim => "semantic_sim",
+            Channel::Reasoning   => "reasoning",
             Channel::Custom(_)   => "custom",
         }
     }

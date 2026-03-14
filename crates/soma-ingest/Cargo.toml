@@ -17,6 +17,10 @@ chrono     = { workspace = true }
 thiserror  = { workspace = true }
 tracing    = { workspace = true }
 soma-llm   = { workspace = true }
+syn          = { version = "2", features = ["full", "visit"] }
+quote        = "1"
+proc-macro2  = { version = "1", features = ["span-locations"] }
+walkdir      = "2"
 
 [dev-dependencies]
 criterion = { workspace = true }

@@ -186,15 +186,128 @@ pub fn soma_tools() -> Vec<McpTool> {
         },
         McpTool {
             name: "soma_context".into(),
-            description: "Return formatted LLM-ready context block for a query".into(),
+            description: "Return formatted LLM-ready context block for a query, with token budget".into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "What context to retrieve"},
-                    "max_tokens": {"type": "integer"},
+                    "max_tokens": {"type": "integer", "description": "Token budget (default 2000, ~4 chars/token)"},
                     "workspace": {"type": "string"}
                 },
                 "required": ["query"]
+            }),
+        },
+        McpTool {
+            name: "soma_cypher".into(),
+            description: "Execute a Cypher query against the SOMA knowledge graph".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Cypher query (MATCH, CREATE, SET, DELETE)"}
+                },
+                "required": ["query"]
+            }),
+        },
+        McpTool {
+            name: "soma_correct".into(),
+            description: "Correct an edge's confidence when AI detects an error (feedback loop)".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "from": {"type": "string", "description": "Source entity label"},
+                    "to": {"type": "string", "description": "Target entity label"},
+                    "new_confidence": {"type": "number", "description": "New confidence value [0.0, 1.0]"},
+                    "reason": {"type": "string", "description": "Why the correction is needed"}
+                },
+                "required": ["from", "to", "new_confidence"]
+            }),
+        },
+        McpTool {
+            name: "soma_validate".into(),
+            description: "Validate an edge after external verification (positive feedback)".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "from": {"type": "string", "description": "Source entity label"},
+                    "to": {"type": "string", "description": "Target entity label"},
+                    "source": {"type": "string", "description": "Verification source (e.g. 'UniProt P42212')"}
+                },
+                "required": ["from", "to"]
+            }),
+        },
+        McpTool {
+            name: "soma_compact".into(),
+            description: "Save a session summary before context compaction to preserve memory".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "summary": {"type": "string", "description": "Session summary text"},
+                    "session_id": {"type": "string", "description": "Session identifier"},
+                    "entities": {"type": "array", "items": {"type": "string"}, "description": "Key entities discussed"},
+                    "decisions": {"type": "array", "items": {"type": "string"}, "description": "Decisions made"}
+                },
+                "required": ["summary"]
+            }),
+        },
+        McpTool {
+            name: "soma_session_restore".into(),
+            description: "Restore context from previous sessions via semantic search on session summaries".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query for session context"},
+                    "limit": {"type": "integer", "description": "Max sessions to return (default 5)"}
+                },
+                "required": ["query"]
+            }),
+        },
+        McpTool {
+            name: "soma_explain".into(),
+            description: "Find and explain paths between two entities in the knowledge graph".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "from": {"type": "string", "description": "Source entity"},
+                    "to": {"type": "string", "description": "Target entity"},
+                    "max_paths": {"type": "integer", "description": "Max paths to return (default 3)"}
+                },
+                "required": ["from", "to"]
+            }),
+        },
+        McpTool {
+            name: "soma_merge".into(),
+            description: "Merge duplicate nodes, transferring all edges from absorbed to kept node".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "keep": {"type": "string", "description": "Label of node to keep"},
+                    "absorb": {"type": "string", "description": "Label of node to absorb/remove"},
+                    "reason": {"type": "string", "description": "Why merging (e.g. 'same entity, different case')"}
+                },
+                "required": ["keep", "absorb"]
+            }),
+        },
+        McpTool {
+            name: "soma_communities".into(),
+            description: "Detect communities in the knowledge graph using Louvain algorithm".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "min_size": {"type": "integer", "description": "Minimum community size (default 3)"}
+                }
+            }),
+        },
+        McpTool {
+            name: "soma_think".into(),
+            description: "Record a reasoning step (Graph of Thoughts) with dependencies".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "thought": {"type": "string", "description": "The reasoning step or conclusion"},
+                    "depends_on": {"type": "array", "items": {"type": "string"}, "description": "Premises this thought depends on"},
+                    "conclusion": {"type": "boolean", "description": "If true, stored with durable Causal channel"}
+                },
+                "required": ["thought"]
             }),
         },
     ]

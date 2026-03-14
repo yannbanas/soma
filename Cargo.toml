@@ -70,6 +70,7 @@ soma-mcp     = { path = "crates/soma-mcp" }
 soma-bench   = { path = "crates/soma-bench" }
 soma-http    = { path = "crates/soma-http" }
 soma-watch   = { path = "crates/soma-watch" }
+soma-cypher  = { path = "crates/soma-cypher" }
 
 [profile.release]
 opt-level       = 3

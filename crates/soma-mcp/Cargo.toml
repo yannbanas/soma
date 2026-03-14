@@ -13,6 +13,7 @@ soma-hdc    = { workspace = true }
 soma-store  = { workspace = true }
 soma-ingest = { workspace = true }
 soma-llm    = { workspace = true }
+soma-cypher = { workspace = true }
 tokio       = { workspace = true }
 serde       = { workspace = true }
 serde_json  = { workspace = true }

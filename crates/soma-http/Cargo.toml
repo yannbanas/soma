@@ -13,6 +13,8 @@ soma-hdc    = { workspace = true }
 soma-store  = { workspace = true }
 soma-bio    = { workspace = true }
 soma-mcp    = { workspace = true }
+soma-cypher = { workspace = true }
+soma-ingest = { workspace = true }
 axum        = { workspace = true }
 tower-http  = { workspace = true }
 tokio       = { workspace = true }
@@ -20,3 +22,7 @@ serde       = { workspace = true }
 serde_json  = { workspace = true }
 chrono      = { workspace = true }
 tracing     = { workspace = true }
+futures       = "0.3"
+async-stream  = "0.3"
+tokio-stream  = { version = "0.1", features = ["sync"] }
+reqwest       = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

@@ -45,7 +45,7 @@ fn main() {
             provider: "ollama".to_string(),
             endpoint: "http://localhost:11434".to_string(),
             model: "cogito:8b".to_string(),
-            embedding_model: Some("nomic-embed-text".to_string()),
+            embedding_model: Some("embeddinggemma:300m".to_string()),
             timeout_ms: 30_000,
         };
         let client = OllamaClient::from_config(&config);
@@ -58,7 +58,7 @@ fn main() {
         }
     };
 
-    // ── Ollama embedding client (nomic-embed-text for 5th search path) ──
+    // ── Ollama embedding client (embeddinggemma:300m for 5th search path) ──
     let embed_client = if no_embed {
         println!("[Embed] Disabled via --no-embed flag");
         None
@@ -67,13 +67,13 @@ fn main() {
             enabled: true,
             provider: "ollama".to_string(),
             endpoint: "http://localhost:11434".to_string(),
-            model: "nomic-embed-text".to_string(),
-            embedding_model: Some("nomic-embed-text".to_string()),
+            model: "embeddinggemma:300m".to_string(),
+            embedding_model: Some("embeddinggemma:300m".to_string()),
             timeout_ms: 30_000,
         };
         let client = OllamaClient::from_config(&config);
         if client.is_available() {
-            println!("[Embed] nomic-embed-text connected (neural search enabled)");
+            println!("[Embed] embeddinggemma:300m connected (neural search enabled)");
             Some(client)
         } else {
             println!("[Embed] Ollama not reachable — running without neural embeddings");
@@ -91,7 +91,7 @@ fn main() {
     md.push_str("# SOMA Benchmark Results\n\n");
     let mut config_parts = vec!["NER (L1.5)", "Pattern extraction (L1)"];
     if llm_client.is_some() { config_parts.push("LLM cogito:8b (L2)"); }
-    if embed_client.is_some() { config_parts.push("Neural embeddings (nomic-embed-text)"); }
+    if embed_client.is_some() { config_parts.push("Neural embeddings (embeddinggemma:300m)"); }
     config_parts.push("5-path hybrid search + weighted RRF");
     md.push_str(&format!("**Configuration**: {}\n\n", config_parts.join(" + ")));
 

@@ -142,12 +142,32 @@ textarea { resize: vertical; min-height: 60px; }
   background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
   background-size: 30px 30px;
 }
-#graph-area svg { width: 100%; height: 100%; }
+#graph-canvas { width: 100%; height: 100%; }
 
 /* Floating toolbar */
 .graph-toolbar {
   position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 10;
 }
+
+/* Loading overlay */
+.loading-overlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(10,10,20,0.7); z-index: 15; transition: opacity 0.3s;
+}
+.loading-overlay.hidden { opacity: 0; pointer-events: none; }
+.loading-spinner {
+  width: 40px; height: 40px; border: 3px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Info bar */
+.graph-info {
+  position: absolute; bottom: 12px; left: 12px; display: flex; gap: 10px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 14px; font-size: 11px; color: var(--text-dim); z-index: 10;
+}
+.graph-info .info-item span { color: var(--accent); font-weight: 600; }
 
 /* Notification toast */
 .toast {
@@ -192,7 +212,7 @@ textarea { resize: vertical; min-height: 60px; }
 .edge-item .edge-channel { font-weight: 600; }
 .edge-item .edge-intensity { float: right; color: var(--text-dim); }
 
-/* Search results in sidebar */
+/* Search results */
 .search-result {
   padding: 8px 10px; background: var(--bg-card); border: 1px solid var(--border);
   border-radius: 6px; margin-bottom: 4px; cursor: pointer; transition: border-color 0.15s;
@@ -201,7 +221,7 @@ textarea { resize: vertical; min-height: 60px; }
 .search-result .sr-label { font-weight: 500; font-size: 12px; }
 .search-result .sr-meta { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
 
-/* Status indicator */
+/* Status */
 .status-dot {
   display: inline-block; width: 7px; height: 7px; border-radius: 50%;
   margin-right: 5px; animation: pulse 2s infinite;
@@ -210,12 +230,12 @@ textarea { resize: vertical; min-height: 60px; }
 .status-dot.offline { background: var(--danger); animation: none; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-/* ── Legend ───────────────────────────────────────────────────────── */
+/* Legend */
 .legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .legend-item { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-dim); }
 .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
 
-/* ── Tabs ─────────────────────────────────────────────────────────── */
+/* Tabs */
 .tabs { display: flex; gap: 0; margin-bottom: 10px; border-bottom: 1px solid var(--border); }
 .tab {
   padding: 6px 12px; font-size: 11px; color: var(--text-muted); cursor: pointer;
@@ -226,20 +246,51 @@ textarea { resize: vertical; min-height: 60px; }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
 
-/* ── Modal overlay ───────────────────────────────────────────────── */
-.modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 50;
-  display: none; align-items: center; justify-content: center;
+/* ── Path visualization ──────────────────────────────────────────── */
+.path-result {
+  padding: 8px 10px; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 6px; margin-bottom: 6px; font-size: 11px;
 }
-.modal-overlay.show { display: flex; }
-.modal {
-  background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
-  padding: 24px; width: 420px; max-height: 80vh; overflow-y: auto;
-  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+.path-step {
+  display: inline-flex; align-items: center; gap: 4px; margin: 2px 0;
 }
-.modal h3 { font-size: 16px; margin-bottom: 16px; }
+.path-arrow { color: var(--text-muted); font-size: 10px; }
+.path-node { color: var(--accent); font-weight: 600; cursor: pointer; }
+.path-node:hover { text-decoration: underline; }
+.path-edge { color: var(--text-dim); font-size: 10px; padding: 1px 5px; background: var(--bg-input); border-radius: 3px; }
 
-/* ── Responsive ──────────────────────────────────────────────────── */
+/* Community card */
+.community-card {
+  padding: 8px 10px; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 6px; margin-bottom: 6px; cursor: pointer; transition: border-color 0.15s;
+}
+.community-card:hover { border-color: var(--accent); }
+.community-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.community-id { font-weight: 600; font-size: 12px; }
+.community-size { font-size: 10px; color: var(--text-dim); }
+.community-members { font-size: 10px; color: var(--text-dim); line-height: 1.5; }
+
+/* Tool sections in sidebar */
+.tool-section { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.tool-section:first-child { margin-top: 0; border-top: none; }
+.tool-section-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+  color: var(--accent); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+}
+.tool-section-title::before {
+  content: ''; display: block; width: 3px; height: 12px; border-radius: 2px; background: var(--accent);
+}
+
+/* Result block */
+.result-block {
+  padding: 8px 10px; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 6px; margin-top: 8px; font-size: 11px; max-height: 300px; overflow-y: auto;
+}
+
+/* Confidence bar */
+.conf-bar { height: 4px; border-radius: 2px; background: var(--border); margin-top: 4px; }
+.conf-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+
 @media (max-width: 900px) {
   :root { --sidebar-w: 220px; --detail-w: 260px; }
 }
@@ -327,6 +378,7 @@ textarea { resize: vertical; min-height: 60px; }
               <option value="episodic">Episodic</option>
               <option value="alarm">Alarm</option>
               <option value="semantic_sim">SemanticSim</option>
+              <option value="reasoning">Reasoning</option>
             </select>
           </div>
           <div class="input-group">
@@ -346,19 +398,176 @@ textarea { resize: vertical; min-height: 60px; }
     </div>
 
     <!-- Tools Tab -->
-    <div class="section tab-content" id="tab-tools" style="border-top:none; padding-top:0;">
-      <div class="btn-group" style="flex-direction:column;">
-        <button class="btn btn-block" onclick="doSleep()">Sleep (Consolidation)</button>
-        <button class="btn btn-block" onclick="refreshGraph()">Refresh Graph</button>
-      </div>
-      <div style="margin-top: 16px;">
-        <div class="section-title">Export</div>
-        <div class="btn-group">
-          <button class="btn btn-sm" onclick="exportJSON()">JSON</button>
-          <button class="btn btn-sm" onclick="exportDOT()">DOT</button>
-          <button class="btn btn-sm" onclick="exportCSV()">CSV</button>
+    <div class="section tab-content" id="tab-tools" style="border-top:none; padding-top:0; overflow-y:auto; max-height: calc(100vh - 260px);">
+
+      <!-- Basic tools -->
+      <div class="tool-section">
+        <div class="btn-group" style="flex-direction:column;">
+          <button class="btn btn-block" onclick="doSleep()">Sleep (Consolidation)</button>
+          <button class="btn btn-block" onclick="refreshGraph()">Refresh Graph</button>
+          <button class="btn btn-block" onclick="loadAll()">Load All Nodes</button>
+        </div>
+        <div style="margin-top: 12px;">
+          <div class="section-title">Display Limit</div>
+          <div class="slider-row">
+            <input type="range" id="limit-slider" min="50" max="2000" step="50" value="200" oninput="onLimitChange(this)">
+            <span id="limit-val">200</span>
+          </div>
+        </div>
+        <div style="margin-top: 10px;">
+          <div class="section-title">Tag Filter</div>
+          <div class="input-group">
+            <input type="text" id="tag-filter" placeholder="Filter by tag..." />
+          </div>
+          <button class="btn btn-sm btn-block" onclick="applyTagFilter()">Apply</button>
+        </div>
+        <div style="margin-top: 12px;">
+          <div class="section-title">Export</div>
+          <div class="btn-group">
+            <button class="btn btn-sm" onclick="exportJSON()">JSON</button>
+            <button class="btn btn-sm" onclick="exportDOT()">DOT</button>
+            <button class="btn btn-sm" onclick="exportCSV()">CSV</button>
+          </div>
         </div>
       </div>
+
+      <!-- Communities -->
+      <div class="tool-section">
+        <div class="tool-section-title">Communities</div>
+        <div class="input-group">
+          <label>Min community size</label>
+          <input type="number" id="community-min-size" value="3" min="2" max="50" />
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary btn-sm" onclick="doCommunities()">Detect</button>
+          <button class="btn btn-sm" onclick="clearCommunities()">Clear overlay</button>
+        </div>
+        <div id="communities-result"></div>
+      </div>
+
+      <!-- Explain Path -->
+      <div class="tool-section">
+        <div class="tool-section-title">Explain Path</div>
+        <div class="input-row">
+          <div class="input-group"><label>From</label><input type="text" id="explain-from" placeholder="Entity A" /></div>
+          <div class="input-group"><label>To</label><input type="text" id="explain-to" placeholder="Entity B" /></div>
+        </div>
+        <div class="input-group">
+          <label>Max paths</label>
+          <input type="number" id="explain-max" value="3" min="1" max="10" />
+        </div>
+        <button class="btn btn-primary btn-sm btn-block" onclick="doExplain()">Find Paths</button>
+        <div id="explain-result"></div>
+      </div>
+
+      <!-- Think (Graph of Thoughts) -->
+      <div class="tool-section">
+        <div class="tool-section-title">Think (GoT)</div>
+        <div class="input-group">
+          <label>Thought / Reasoning step</label>
+          <textarea id="think-thought" placeholder="If X then Y because Z..."></textarea>
+        </div>
+        <div class="input-group">
+          <label>Depends on (comma-separated)</label>
+          <input type="text" id="think-deps" placeholder="premise A, premise B" />
+        </div>
+        <div class="input-group" style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="think-conclusion" style="width:auto;" />
+          <label for="think-conclusion" style="margin:0; cursor:pointer;">Mark as conclusion (durable)</label>
+        </div>
+        <button class="btn btn-primary btn-sm btn-block" onclick="doThink()">Record Thought</button>
+      </div>
+
+      <!-- Correct / Validate (Feedback) -->
+      <div class="tool-section">
+        <div class="tool-section-title">AI Feedback</div>
+        <div style="margin-bottom:10px;">
+          <div class="section-title" style="color:var(--warning);">Correct Edge</div>
+          <div class="input-row">
+            <div class="input-group"><label>From</label><input type="text" id="correct-from" placeholder="Entity" /></div>
+            <div class="input-group"><label>To</label><input type="text" id="correct-to" placeholder="Entity" /></div>
+          </div>
+          <div class="input-row">
+            <div class="input-group"><label>New confidence</label><input type="number" id="correct-conf" value="0.2" min="0" max="1" step="0.05" /></div>
+          </div>
+          <div class="input-group">
+            <label>Reason</label>
+            <input type="text" id="correct-reason" placeholder="Why correction needed..." />
+          </div>
+          <button class="btn btn-warning btn-sm btn-block" onclick="doCorrect()">Correct</button>
+        </div>
+        <div>
+          <div class="section-title" style="color:var(--success);">Validate Edge</div>
+          <div class="input-row">
+            <div class="input-group"><label>From</label><input type="text" id="validate-from" placeholder="Entity" /></div>
+            <div class="input-group"><label>To</label><input type="text" id="validate-to" placeholder="Entity" /></div>
+          </div>
+          <div class="input-group">
+            <label>Source (optional)</label>
+            <input type="text" id="validate-source" placeholder="e.g. UniProt P42212" />
+          </div>
+          <button class="btn btn-success btn-sm btn-block" onclick="doValidate()">Validate</button>
+        </div>
+      </div>
+
+      <!-- Merge Nodes -->
+      <div class="tool-section">
+        <div class="tool-section-title">Merge Nodes</div>
+        <div class="input-row">
+          <div class="input-group"><label>Keep</label><input type="text" id="merge-keep" placeholder="Node to keep" /></div>
+          <div class="input-group"><label>Absorb</label><input type="text" id="merge-absorb" placeholder="Node to remove" /></div>
+        </div>
+        <div class="input-group">
+          <label>Reason</label>
+          <input type="text" id="merge-reason" placeholder="e.g. same entity, different case" />
+        </div>
+        <button class="btn btn-danger btn-sm btn-block" onclick="doMerge()">Merge</button>
+      </div>
+
+      <!-- Session (Compact / Restore) -->
+      <div class="tool-section">
+        <div class="tool-section-title">Session Memory</div>
+        <div style="margin-bottom:10px;">
+          <div class="section-title">Save Session Summary</div>
+          <div class="input-group">
+            <label>Summary</label>
+            <textarea id="compact-summary" placeholder="Key findings from this session..."></textarea>
+          </div>
+          <div class="input-group">
+            <label>Entities (comma-separated)</label>
+            <input type="text" id="compact-entities" placeholder="ChromoQ, EGFP" />
+          </div>
+          <div class="input-group">
+            <label>Decisions (comma-separated)</label>
+            <input type="text" id="compact-decisions" placeholder="Use EGFP for pH<6.5" />
+          </div>
+          <button class="btn btn-primary btn-sm btn-block" onclick="doCompact()">Save Session</button>
+        </div>
+        <div>
+          <div class="section-title">Restore Previous Sessions</div>
+          <div class="input-group">
+            <input type="text" id="restore-query" placeholder="Search session history..." />
+          </div>
+          <button class="btn btn-sm btn-block" onclick="doSessionRestore()">Restore</button>
+          <div id="restore-result"></div>
+        </div>
+      </div>
+
+      <!-- Context (with token budget) -->
+      <div class="tool-section">
+        <div class="tool-section-title">Context Query</div>
+        <div class="input-group">
+          <label>Query</label>
+          <input type="text" id="context-query" placeholder="What context to retrieve..." />
+        </div>
+        <div class="input-group">
+          <label>Max tokens</label>
+          <input type="number" id="context-tokens" value="2000" min="100" max="10000" step="100" />
+        </div>
+        <button class="btn btn-primary btn-sm btn-block" onclick="doContext()">Get Context</button>
+        <div id="context-result"></div>
+      </div>
+
     </div>
 
     <!-- Filters -->
@@ -398,8 +607,17 @@ textarea { resize: vertical; min-height: 60px; }
       <button class="btn btn-sm" onclick="zoomFit()" title="Fit to view">Fit</button>
       <button class="btn btn-sm" onclick="toggleLabels()" title="Toggle labels">Labels</button>
       <button class="btn btn-sm" onclick="togglePhysics()" id="btn-physics" title="Toggle physics">Pause</button>
+      <button class="btn btn-sm" onclick="toggleCommunityView()" id="btn-community" title="Toggle community colors" style="display:none;">Communities</button>
     </div>
-    <svg id="graph-svg"></svg>
+    <canvas id="graph-canvas"></canvas>
+    <div class="loading-overlay" id="loading">
+      <div class="loading-spinner"></div>
+    </div>
+    <div class="graph-info">
+      <div class="info-item">Showing <span id="info-showing">0</span> / <span id="info-total">0</span> nodes</div>
+      <div class="info-item">Edges: <span id="info-edges">0</span></div>
+      <div class="info-item">FPS: <span id="info-fps">0</span></div>
+    </div>
   </main>
 
   <!-- ── Detail Panel ────────────────────────────────────────────── -->
@@ -420,20 +638,29 @@ textarea { resize: vertical; min-height: 60px; }
 const KIND_COLORS = {
   entity: '#60a5fa', concept: '#34d399', event: '#fbbf24',
   measurement: '#f87171', warning: '#fb923c', procedure: '#a78bfa',
-  // Also support capitalized forms
   Entity: '#60a5fa', Concept: '#34d399', Event: '#fbbf24',
   Measurement: '#f87171', Warning: '#fb923c', Procedure: '#a78bfa',
 };
 const CHANNEL_COLORS = {
   trail: '#60a5fa', derives_de: '#34d399', causal: '#f87171',
   episodic: '#fbbf24', alarm: '#fb923c', semantic_sim: '#a78bfa',
+  reasoning: '#e879f9', custom: '#94a3b8',
   Trail: '#60a5fa', DerivesDe: '#34d399', Causal: '#f87171',
   Episodic: '#fbbf24', Alarm: '#fb923c', SemanticSim: '#a78bfa',
+  Reasoning: '#e879f9', Custom: '#94a3b8',
 };
+
+// Community colors for graph overlay
+const COMMUNITY_PALETTE = [
+  '#60a5fa', '#34d399', '#f87171', '#fbbf24', '#a78bfa',
+  '#fb923c', '#e879f9', '#2dd4bf', '#f472b6', '#38bdf8',
+  '#4ade80', '#facc15', '#c084fc', '#fb7185', '#22d3ee',
+];
+let communityAssignments = null; // node label → community id
 
 // ── State ──────────────────────────────────────────────────────────
 let graphData = { nodes: [], links: [] };
-let simulation, svgGroup, linkSel, nodeSel, labelSel, linkLabelSel;
+let simulation;
 let showLabels = true;
 let physicsActive = true;
 let activeKinds = new Set(['entity', 'concept', 'event', 'measurement', 'warning', 'procedure',
@@ -441,6 +668,17 @@ let activeKinds = new Set(['entity', 'concept', 'event', 'measurement', 'warning
 let minIntensity = 0;
 let highlightedNodes = new Set();
 let selectedNode = null;
+let displayLimit = 200;
+let totalNodes = 0, totalEdges = 0;
+
+// Canvas state
+let canvas, ctx;
+let transform = d3.zoomIdentity;
+let hoveredNode = null;
+let draggedNode = null;
+
+// FPS counter
+let frameCount = 0, lastFpsTime = Date.now();
 
 // ── Tabs ───────────────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(tab => {
@@ -457,7 +695,7 @@ let searchTimeout;
 document.getElementById('search-input').addEventListener('input', function() {
   clearTimeout(searchTimeout);
   const q = this.value.trim();
-  if (!q) { document.getElementById('search-results').innerHTML = ''; highlightedNodes.clear(); applyFilters(); return; }
+  if (!q) { document.getElementById('search-results').innerHTML = ''; highlightedNodes.clear(); return; }
   searchTimeout = setTimeout(() => doSearch(q), 300);
 });
 
@@ -471,26 +709,13 @@ async function doSearch(q) {
     results.forEach(r => {
       highlightedNodes.add(r.label);
       const score = r.score ? r.score.toFixed(4) : '-';
-      const sources = (r.sources || []).join(', ');
-      html += `<div class="search-result" onclick="focusNode('${esc(r.label)}')">
+      html += `<div class="search-result" onclick="exploreNode('${esc(r.label)}')">
         <div class="sr-label">${esc(r.label)}</div>
-        <div class="sr-meta">${esc(r.kind || '')} &middot; score: ${score} &middot; ${esc(sources)}</div>
+        <div class="sr-meta">${esc(r.kind || '')} &middot; score: ${score}</div>
       </div>`;
     });
     document.getElementById('search-results').innerHTML = html || '<div style="color:var(--text-muted);font-size:11px;padding:6px 0;">No results</div>';
-    applyFilters();
   } catch(e) { showToast('Search failed: ' + e.message, 'error'); }
-}
-
-function focusNode(label) {
-  const n = graphData.nodes.find(d => d.id === label);
-  if (n && n.x != null) {
-    const svg = d3.select('#graph-svg');
-    const w = svg.node().clientWidth, h = svg.node().clientHeight;
-    const transform = d3.zoomIdentity.translate(w/2 - n.x*1.5, h/2 - n.y*1.5).scale(1.5);
-    svg.transition().duration(500).call(zoom.transform, transform);
-    selectNode(n);
-  }
 }
 
 // ── Actions ────────────────────────────────────────────────────────
@@ -570,137 +795,297 @@ function formatUptime(secs) {
 setInterval(refreshStats, 5000);
 refreshStats();
 
-// ── Graph ──────────────────────────────────────────────────────────
-const svg = d3.select('#graph-svg');
-const width = () => svg.node().clientWidth;
-const height = () => svg.node().clientHeight;
+// ── Canvas Setup ───────────────────────────────────────────────────
+canvas = document.getElementById('graph-canvas');
+ctx = canvas.getContext('2d');
 
-// Glow filter for nodes
-const defs = svg.append('defs');
-defs.append('marker')
-  .attr('id', 'arrowhead').attr('viewBox', '0 -5 10 10')
-  .attr('refX', 28).attr('refY', 0).attr('markerWidth', 8).attr('markerHeight', 8)
-  .attr('orient', 'auto')
-  .append('path').attr('d', 'M0,-4L10,0L0,4').attr('fill', '#667');
+function resizeCanvas() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * devicePixelRatio;
+  canvas.height = rect.height * devicePixelRatio;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
 
-// Glow filter
-const glow = defs.append('filter').attr('id', 'glow');
-glow.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'blur');
-glow.append('feMerge').selectAll('feMergeNode').data(['blur', 'SourceGraphic'])
-  .join('feMergeNode').attr('in', d => d);
+function nodeRadius(d) { return 6 + Math.sqrt((d.degree || 0) + 1) * 3; }
 
-svgGroup = svg.append('g');
+// ── Canvas Rendering ───────────────────────────────────────────────
+function drawGraph() {
+  const w = canvas.width / devicePixelRatio;
+  const h = canvas.height / devicePixelRatio;
 
-const zoom = d3.zoom().scaleExtent([0.1, 8]).on('zoom', (e) => svgGroup.attr('transform', e.transform));
-svg.call(zoom);
+  ctx.save();
+  ctx.clearRect(0, 0, w, h);
+  ctx.translate(transform.x, transform.y);
+  ctx.scale(transform.k, transform.k);
 
-// Link group, link label group, node group, label group
-const linkGroup = svgGroup.append('g').attr('class', 'links');
-const linkLabelGroup = svgGroup.append('g').attr('class', 'link-labels');
-const nodeGroup = svgGroup.append('g').attr('class', 'nodes');
-const labelGroup = svgGroup.append('g').attr('class', 'labels');
+  const visibleNodes = new Set();
+  graphData.nodes.forEach(d => {
+    const kindOk = activeKinds.has(d.kind);
+    const highlighted = highlightedNodes.size === 0 || highlightedNodes.has(d.id);
+    if (kindOk && highlighted) visibleNodes.add(d.id);
+  });
 
-simulation = d3.forceSimulation()
-  .force('link', d3.forceLink().id(d => d.id).distance(140))
-  .force('charge', d3.forceManyBody().strength(-350))
-  .force('center', d3.forceCenter(width()/2, height()/2))
-  .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 8))
-  .force('x', d3.forceX(width()/2).strength(0.04))
-  .force('y', d3.forceY(height()/2).strength(0.04));
+  // Draw edges
+  graphData.links.forEach(d => {
+    const srcId = typeof d.source === 'object' ? d.source.id : d.source;
+    const tgtId = typeof d.target === 'object' ? d.target.id : d.target;
+    const src = typeof d.source === 'object' ? d.source : null;
+    const tgt = typeof d.target === 'object' ? d.target : null;
+    if (!src || !tgt) return;
 
-function nodeRadius(d) { return 10 + Math.sqrt((d.degree || 0) + 1) * 4; }
+    const nodesVis = visibleNodes.has(srcId) && visibleNodes.has(tgtId);
+    const intensityOk = (d.intensity || 0) >= minIntensity;
+    if (!nodesVis || !intensityOk) return;
 
-function renderGraph() {
-  // Links
-  linkSel = linkGroup.selectAll('line').data(graphData.links, d => (typeof d.source === 'object' ? d.source.id : d.source) + '-' + (typeof d.target === 'object' ? d.target.id : d.target) + '-' + d.channel);
-  linkSel.exit().remove();
-  const linkEnter = linkSel.enter().append('line')
-    .attr('stroke', d => CHANNEL_COLORS[d.channel] || '#667')
-    .attr('marker-end', 'url(#arrowhead)');
-  linkSel = linkEnter.merge(linkSel)
-    .attr('stroke-width', d => 1.5 + (d.intensity || 0.5) * 3)
-    .attr('stroke-opacity', d => 0.4 + (d.intensity || 0.5) * 0.5);
+    const alpha = 0.25 + (d.intensity || 0.5) * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(src.x, src.y);
+    ctx.lineTo(tgt.x, tgt.y);
+    ctx.strokeStyle = (CHANNEL_COLORS[d.channel] || '#667');
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = 1 + (d.intensity || 0.5) * 2;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  });
 
-  // Nodes
-  nodeSel = nodeGroup.selectAll('circle').data(graphData.nodes, d => d.id);
-  nodeSel.exit().remove();
-  const nodeEnter = nodeSel.enter().append('circle')
-    .attr('cursor', 'pointer')
-    .on('click', (e, d) => { e.stopPropagation(); selectNode(d); })
-    .on('dblclick', (e, d) => { e.stopPropagation(); focusNode(d.id); })
-    .call(d3.drag()
-      .on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
-      .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
-      .on('end', (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; })
-    );
-  nodeSel = nodeEnter.merge(nodeSel)
-    .attr('r', d => nodeRadius(d))
-    .attr('fill', d => KIND_COLORS[d.kind] || '#888')
-    .attr('stroke', d => selectedNode && selectedNode.id === d.id ? '#fff' : 'rgba(255,255,255,0.3)')
-    .attr('stroke-width', d => selectedNode && selectedNode.id === d.id ? 3 : 1.5)
-    .attr('filter', 'url(#glow)');
+  // Draw nodes
+  graphData.nodes.forEach(d => {
+    if (!visibleNodes.has(d.id)) return;
+    const r = nodeRadius(d);
+    const isSelected = selectedNode && selectedNode.id === d.id;
+    const isHovered = hoveredNode && hoveredNode.id === d.id;
 
-  // Labels
-  labelSel = labelGroup.selectAll('text').data(graphData.nodes, d => d.id);
-  labelSel.exit().remove();
-  const labelEnter = labelSel.enter().append('text')
-    .attr('font-size', 12)
-    .attr('font-weight', '500')
-    .attr('fill', '#eee')
-    .attr('dx', d => nodeRadius(d) + 6)
-    .attr('dy', 4)
-    .attr('pointer-events', 'none')
-    .style('text-shadow', '0 0 6px rgba(0,0,0,0.9), 0 0 3px rgba(0,0,0,0.9)');
-  labelSel = labelEnter.merge(labelSel)
-    .attr('dx', d => nodeRadius(d) + 6)
-    .text(d => {
-      const label = d.id.length > 35 ? d.id.substring(0, 33) + '...' : d.id;
-      return showLabels ? label : (d.degree >= 2 ? label : '');
-    });
+    // Glow
+    if (isSelected || isHovered) {
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, r + 4, 0, Math.PI * 2);
+      ctx.fillStyle = (KIND_COLORS[d.kind] || '#888');
+      ctx.globalAlpha = 0.3;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
 
-  // Link labels (channel name on each edge)
-  linkLabelSel = linkLabelGroup.selectAll('text').data(graphData.links, d => (typeof d.source === 'object' ? d.source.id : d.source) + '-' + (typeof d.target === 'object' ? d.target.id : d.target) + '-' + d.channel);
-  linkLabelSel.exit().remove();
-  const linkLabelEnter = linkLabelSel.enter().append('text')
-    .attr('font-size', 9)
-    .attr('font-weight', '600')
-    .attr('text-anchor', 'middle')
-    .attr('dy', -5)
-    .attr('pointer-events', 'none')
-    .style('text-shadow', '0 0 4px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.9)');
-  linkLabelSel = linkLabelEnter.merge(linkLabelSel)
-    .attr('fill', d => CHANNEL_COLORS[d.channel] || '#888')
-    .text(d => d.channel + (d.intensity != null ? ' ' + d.intensity.toFixed(2) : ''));
+    // Node circle
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+    if (communityAssignments && communityAssignments[d.id] !== undefined) {
+      ctx.fillStyle = COMMUNITY_PALETTE[communityAssignments[d.id] % COMMUNITY_PALETTE.length];
+    } else {
+      ctx.fillStyle = (KIND_COLORS[d.kind] || '#888');
+    }
+    ctx.fill();
 
-  // Simulation
-  simulation.nodes(graphData.nodes);
-  simulation.force('link').links(graphData.links);
-  simulation.alpha(0.6).restart();
-
-  simulation.on('tick', () => {
-    linkSel.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
-           .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
-    nodeSel.attr('cx', d => d.x).attr('cy', d => d.y);
-    labelSel.attr('x', d => d.x).attr('y', d => d.y);
-    if (linkLabelSel) {
-      linkLabelSel
-        .attr('x', d => (d.source.x + d.target.x) / 2)
-        .attr('y', d => (d.source.y + d.target.y) / 2);
+    if (isSelected) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      ctx.stroke();
     }
   });
 
-  applyFilters();
+  // Draw labels
+  if (showLabels && transform.k > 0.3) {
+    ctx.font = `${Math.max(9, 11 / Math.sqrt(transform.k))}px Inter, system-ui, sans-serif`;
+    ctx.textBaseline = 'middle';
+
+    graphData.nodes.forEach(d => {
+      if (!visibleNodes.has(d.id)) return;
+      // Only show labels for nodes with degree >= 1, or all if zoomed in enough
+      if (transform.k < 0.8 && (d.degree || 0) < 2) return;
+
+      const r = nodeRadius(d);
+      const label = d.id.length > 30 ? d.id.substring(0, 28) + '...' : d.id;
+
+      ctx.fillStyle = '#000';
+      ctx.globalAlpha = 0.7;
+      const tw = ctx.measureText(label).width;
+      ctx.fillRect(d.x + r + 3, d.y - 7, tw + 4, 14);
+
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#eee';
+      ctx.fillText(label, d.x + r + 5, d.y);
+    });
+  }
+
+  ctx.restore();
+
+  // FPS
+  frameCount++;
+  const now = Date.now();
+  if (now - lastFpsTime >= 1000) {
+    document.getElementById('info-fps').textContent = frameCount;
+    frameCount = 0;
+    lastFpsTime = now;
+  }
+
+  if (physicsActive || draggedNode) requestAnimationFrame(drawGraph);
 }
 
-async function refreshGraph() {
+// ── Simulation ─────────────────────────────────────────────────────
+function initSimulation() {
+  const w = canvas.width / devicePixelRatio;
+  const h = canvas.height / devicePixelRatio;
+
+  simulation = d3.forceSimulation(graphData.nodes)
+    .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(100))
+    .force('charge', d3.forceManyBody().strength(-200))
+    .force('center', d3.forceCenter(w/2, h/2))
+    .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 4))
+    .force('x', d3.forceX(w/2).strength(0.03))
+    .force('y', d3.forceY(h/2).strength(0.03))
+    .alphaDecay(0.02)
+    .on('tick', drawGraph);
+
+  // Stop auto-rendering after simulation cools
+  simulation.on('end', () => { drawGraph(); });
+}
+
+// ── Zoom & Pan (Canvas) ────────────────────────────────────────────
+const zoomBehavior = d3.zoom()
+  .scaleExtent([0.05, 10])
+  .on('zoom', (event) => {
+    transform = event.transform;
+    drawGraph();
+  });
+d3.select(canvas).call(zoomBehavior);
+
+// ── Mouse Interaction ──────────────────────────────────────────────
+function getNodeAtPoint(px, py) {
+  // Transform screen coords to graph coords
+  const gx = (px - transform.x) / transform.k;
+  const gy = (py - transform.y) / transform.k;
+
+  for (let i = graphData.nodes.length - 1; i >= 0; i--) {
+    const d = graphData.nodes[i];
+    const r = nodeRadius(d);
+    const dx = gx - d.x, dy = gy - d.y;
+    if (dx*dx + dy*dy < (r+4)*(r+4)) return d;
+  }
+  return null;
+}
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  const node = getNodeAtPoint(px, py);
+  hoveredNode = node;
+  canvas.style.cursor = node ? 'pointer' : 'default';
+
+  if (draggedNode) {
+    const gx = (px - transform.x) / transform.k;
+    const gy = (py - transform.y) / transform.k;
+    draggedNode.fx = gx;
+    draggedNode.fy = gy;
+    simulation.alpha(0.3).restart();
+  }
+
+  if (!physicsActive) drawGraph();
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  const node = getNodeAtPoint(px, py);
+  if (node) {
+    e.stopPropagation();
+    draggedNode = node;
+    node.fx = node.x;
+    node.fy = node.y;
+    simulation.alphaTarget(0.3).restart();
+  }
+});
+
+canvas.addEventListener('mouseup', () => {
+  if (draggedNode) {
+    draggedNode.fx = null;
+    draggedNode.fy = null;
+    draggedNode = null;
+    simulation.alphaTarget(0);
+  }
+});
+
+canvas.addEventListener('click', (e) => {
+  if (draggedNode) return;
+  const rect = canvas.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  const node = getNodeAtPoint(px, py);
+  if (node) {
+    selectNode(node);
+  } else {
+    closeDetail();
+  }
+});
+
+canvas.addEventListener('dblclick', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  const node = getNodeAtPoint(px, py);
+  if (node) {
+    exploreNode(node.id);
+  }
+});
+
+// ── Graph Loading ──────────────────────────────────────────────────
+async function refreshGraph(params = {}) {
+  showLoading(true);
   try {
-    const res = await fetch('/api/graph');
-    graphData = await res.json();
-    renderGraph();
+    const limit = params.limit || displayLimit;
+    const tag = params.tag || '';
+    const center = params.center || '';
+    const depth = params.depth || 2;
+
+    let url = `/api/graph?limit=${limit}`;
+    if (tag) url += `&tag=${encodeURIComponent(tag)}`;
+    if (center) url += `&center=${encodeURIComponent(center)}&depth=${depth}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    totalNodes = data.total_nodes || 0;
+    totalEdges = data.total_edges || 0;
+
+    graphData = { nodes: data.nodes || [], links: data.links || [] };
+
+    document.getElementById('info-showing').textContent = graphData.nodes.length;
+    document.getElementById('info-total').textContent = totalNodes;
+    document.getElementById('info-edges').textContent = graphData.links.length;
+
+    initSimulation();
     refreshStats();
-    // Auto zoom-to-fit after simulation stabilizes
-    setTimeout(zoomFit, 800);
+    setTimeout(zoomFit, 1000);
   } catch(e) { showToast('Failed to load graph: ' + e.message, 'error'); }
+  showLoading(false);
+}
+
+async function exploreNode(label) {
+  // Load neighborhood of a specific node
+  showToast(`Exploring neighborhood of: ${label}`, 'success');
+  await refreshGraph({ center: label, depth: 2, limit: 0 });
+  // Focus on the center node
+  const n = graphData.nodes.find(d => d.id === label);
+  if (n) { setTimeout(() => selectNode(n), 500); }
+}
+
+async function loadAll() {
+  showToast('Loading all nodes...', 'success');
+  await refreshGraph({ limit: 0 });
+}
+
+function applyTagFilter() {
+  const tag = document.getElementById('tag-filter').value.trim();
+  if (tag) {
+    refreshGraph({ tag });
+  } else {
+    refreshGraph();
+  }
+}
+
+function onLimitChange(el) {
+  displayLimit = parseInt(el.value);
+  document.getElementById('limit-val').textContent = displayLimit;
 }
 
 // ── Filters ────────────────────────────────────────────────────────
@@ -713,40 +1098,13 @@ function toggleKind(el) {
   } else {
     activeKinds.add(kind); activeKinds.add(kindCap);
   }
-  applyFilters();
+  drawGraph();
 }
 
 function onIntensityChange(el) {
   minIntensity = parseFloat(el.value);
   document.getElementById('intensity-val').textContent = minIntensity.toFixed(2);
-  applyFilters();
-}
-
-function applyFilters() {
-  if (!nodeSel) return;
-  const visibleNodes = new Set();
-  nodeSel.style('opacity', d => {
-    const kindOk = activeKinds.has(d.kind);
-    const highlighted = highlightedNodes.size === 0 || highlightedNodes.has(d.id);
-    const visible = kindOk && highlighted;
-    if (visible) visibleNodes.add(d.id);
-    return visible ? 1 : 0.08;
-  });
-  labelSel.style('opacity', d => visibleNodes.has(d.id) ? 1 : 0);
-  linkSel.style('opacity', d => {
-    const srcId = typeof d.source === 'object' ? d.source.id : d.source;
-    const tgtId = typeof d.target === 'object' ? d.target.id : d.target;
-    const nodesVisible = visibleNodes.has(srcId) && visibleNodes.has(tgtId);
-    return (nodesVisible && (d.intensity || 0) >= minIntensity) ? (0.25 + (d.intensity || 0.5) * 0.5) : 0.03;
-  });
-  if (linkLabelSel) {
-    linkLabelSel.style('opacity', d => {
-      const srcId = typeof d.source === 'object' ? d.source.id : d.source;
-      const tgtId = typeof d.target === 'object' ? d.target.id : d.target;
-      const nodesVisible = visibleNodes.has(srcId) && visibleNodes.has(tgtId);
-      return (nodesVisible && (d.intensity || 0) >= minIntensity) ? 0.85 : 0;
-    });
-  }
+  drawGraph();
 }
 
 // ── Node Detail ────────────────────────────────────────────────────
@@ -756,7 +1114,6 @@ function selectNode(d) {
   panel.classList.add('open');
   document.getElementById('detail-title').textContent = d.id;
 
-  // Find connected edges
   const inEdges = graphData.links.filter(l => (typeof l.target === 'object' ? l.target.id : l.target) === d.id);
   const outEdges = graphData.links.filter(l => (typeof l.source === 'object' ? l.source.id : l.source) === d.id);
 
@@ -776,60 +1133,72 @@ function selectNode(d) {
     <div class="detail-field">
       <div class="field-label">Tags</div>
       <div class="field-value">${(d.tags && d.tags.length) ? d.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('') : '<span style="color:var(--text-muted)">none</span>'}</div>
+    </div>
+    <div class="btn-group" style="margin-bottom:12px;">
+      <button class="btn btn-sm btn-primary" onclick="exploreNode('${esc(d.id)}')">Explore Neighbors</button>
     </div>`;
 
   if (outEdges.length > 0) {
-    html += `<div class="detail-field"><div class="field-label">Outgoing Edges (${outEdges.length})</div>`;
-    outEdges.forEach(e => {
+    html += `<div class="detail-field"><div class="field-label">Outgoing (${outEdges.length})</div>`;
+    outEdges.slice(0, 20).forEach(e => {
       const targetId = typeof e.target === 'object' ? e.target.id : e.target;
       const ch = e.channel || '?';
       const int = (e.intensity || 0).toFixed(2);
-      html += `<div class="edge-item" onclick="focusNode('${esc(targetId)}')">
-        <span class="edge-channel" style="color:${CHANNEL_COLORS[ch] || '#888'}">${esc(ch)}</span> &rarr; ${esc(targetId)}
-        <span class="edge-intensity">${int}</span>
+      html += `<div class="edge-item">
+        <div onclick="exploreNode('${esc(targetId)}')" style="cursor:pointer;">
+          <span class="edge-channel" style="color:${CHANNEL_COLORS[ch] || '#888'}">${esc(ch)}</span> &rarr; ${esc(targetId)}
+          <span class="edge-intensity">${int}</span>
+        </div>
+        ${addFeedbackButtons(d.id, targetId)}
       </div>`;
     });
+    if (outEdges.length > 20) html += `<div style="color:var(--text-muted);font-size:10px;padding:4px">+${outEdges.length - 20} more</div>`;
     html += `</div>`;
   }
 
   if (inEdges.length > 0) {
-    html += `<div class="detail-field"><div class="field-label">Incoming Edges (${inEdges.length})</div>`;
-    inEdges.forEach(e => {
+    html += `<div class="detail-field"><div class="field-label">Incoming (${inEdges.length})</div>`;
+    inEdges.slice(0, 20).forEach(e => {
       const sourceId = typeof e.source === 'object' ? e.source.id : e.source;
       const ch = e.channel || '?';
       const int = (e.intensity || 0).toFixed(2);
-      html += `<div class="edge-item" onclick="focusNode('${esc(sourceId)}')">
+      html += `<div class="edge-item" onclick="exploreNode('${esc(sourceId)}')">
         ${esc(sourceId)} &rarr; <span class="edge-channel" style="color:${CHANNEL_COLORS[ch] || '#888'}">${esc(ch)}</span>
         <span class="edge-intensity">${int}</span>
       </div>`;
     });
+    if (inEdges.length > 20) html += `<div style="color:var(--text-muted);font-size:10px;padding:4px">+${inEdges.length - 20} more</div>`;
     html += `</div>`;
   }
 
-  html += `<div class="btn-group" style="margin-top:16px;">
+  html += `<div class="btn-group" style="margin-top:16px; flex-wrap:wrap;">
     <button class="btn btn-sm btn-primary" onclick="doReinforceNode('${esc(d.id)}')">Reinforce</button>
     <button class="btn btn-sm btn-danger" onclick="doForgetNode('${esc(d.id)}')">Forget</button>
+    <button class="btn btn-sm" onclick="prefillExplainFrom('${esc(d.id)}')">Explain from</button>
+    <button class="btn btn-sm" onclick="prefillMerge('${esc(d.id)}')">Merge into</button>
   </div>`;
 
-  document.getElementById('detail-body').innerHTML = html;
-
-  // Highlight selected node
-  if (nodeSel) {
-    nodeSel.attr('stroke', n => n.id === d.id ? '#fff' : 'rgba(255,255,255,0.15)')
-           .attr('stroke-width', n => n.id === d.id ? 2 : 0.5);
+  // Show community if assigned
+  if (communityAssignments && communityAssignments[d.id] !== undefined) {
+    const cid = communityAssignments[d.id];
+    const color = COMMUNITY_PALETTE[cid % COMMUNITY_PALETTE.length];
+    html += `<div class="detail-field" style="margin-top:8px;">
+      <div class="field-label">Community</div>
+      <div class="field-value"><span style="color:${color}; cursor:pointer;" onclick="highlightCommunity(${cid})">Community ${cid}</span></div>
+    </div>`;
   }
+
+  document.getElementById('detail-body').innerHTML = html;
+  drawGraph();
 }
 
 function closeDetail() {
   document.getElementById('detail-panel').classList.remove('open');
   selectedNode = null;
-  if (nodeSel) {
-    nodeSel.attr('stroke', 'rgba(255,255,255,0.15)').attr('stroke-width', 0.5);
-  }
+  drawGraph();
 }
 
 async function doReinforceNode(label) {
-  // Reinforce all outgoing edges
   const outEdges = graphData.links.filter(l => (typeof l.source === 'object' ? l.source.id : l.source) === label);
   for (const e of outEdges) {
     const to = typeof e.target === 'object' ? e.target.id : e.target;
@@ -854,33 +1223,24 @@ function zoomFit() {
   const xs = graphData.nodes.map(d => d.x || 0), ys = graphData.nodes.map(d => d.y || 0);
   const x0 = Math.min(...xs) - 50, x1 = Math.max(...xs) + 50;
   const y0 = Math.min(...ys) - 50, y1 = Math.max(...ys) + 50;
-  const w = width(), h = height();
+  const w = canvas.width / devicePixelRatio, h = canvas.height / devicePixelRatio;
   const scale = Math.min(w / (x1 - x0), h / (y1 - y0), 3);
   const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-  svg.transition().duration(500).call(zoom.transform,
-    d3.zoomIdentity.translate(w/2, h/2).scale(scale).translate(-cx, -cy));
+  const t = d3.zoomIdentity.translate(w/2, h/2).scale(scale).translate(-cx, -cy);
+  d3.select(canvas).transition().duration(500).call(zoomBehavior.transform, t);
 }
 
-function toggleLabels() {
-  showLabels = !showLabels;
-  if (labelSel) {
-    labelSel.text(d => {
-      const label = d.id.length > 30 ? d.id.substring(0, 28) + '...' : d.id;
-      return showLabels ? label : (d.degree >= 3 ? label : '');
-    });
-  }
-}
+function toggleLabels() { showLabels = !showLabels; drawGraph(); }
 
 function togglePhysics() {
   physicsActive = !physicsActive;
-  if (physicsActive) { simulation.alpha(0.3).restart(); } else { simulation.stop(); }
+  if (physicsActive) { simulation.alpha(0.3).restart(); }
+  else { simulation.stop(); drawGraph(); }
   document.getElementById('btn-physics').textContent = physicsActive ? 'Pause' : 'Play';
 }
 
 // ── Export ──────────────────────────────────────────────────────────
-function exportJSON() {
-  download('soma-graph.json', JSON.stringify(graphData, null, 2), 'application/json');
-}
+function exportJSON() { download('soma-graph.json', JSON.stringify(graphData, null, 2), 'application/json'); }
 
 function exportDOT() {
   let dot = 'digraph soma {\n  rankdir=LR;\n';
@@ -919,8 +1279,299 @@ function showToast(msg, type) {
   setTimeout(() => t.className = 'toast', 3000);
 }
 
-// Click on background to deselect
-svg.on('click', () => closeDetail());
+function showLoading(show) {
+  document.getElementById('loading').classList.toggle('hidden', !show);
+}
+
+// ── Communities ────────────────────────────────────────────────────
+async function doCommunities() {
+  const minSize = parseInt(document.getElementById('community-min-size').value) || 3;
+  try {
+    const res = await fetch(`/communities?min_size=${minSize}`);
+    const data = await res.json();
+    const communities = data.communities || {};
+    const modularity = (data.modularity || 0).toFixed(4);
+    const count = Object.keys(communities).length;
+
+    // Build assignment map for graph coloring
+    communityAssignments = {};
+    Object.entries(communities).forEach(([cid, members]) => {
+      members.forEach(m => { communityAssignments[m] = parseInt(cid); });
+    });
+
+    // Show community button
+    document.getElementById('btn-community').style.display = '';
+
+    // Render results
+    let html = `<div class="result-block">
+      <div style="margin-bottom:8px; color:var(--accent);">
+        <strong>${count}</strong> communities &middot; modularity: <strong>${modularity}</strong>
+      </div>`;
+    // Sort by size descending
+    const sorted = Object.entries(communities).sort((a,b) => b[1].length - a[1].length);
+    sorted.slice(0, 20).forEach(([cid, members]) => {
+      const color = COMMUNITY_PALETTE[parseInt(cid) % COMMUNITY_PALETTE.length];
+      html += `<div class="community-card" onclick="highlightCommunity(${cid})">
+        <div class="community-header">
+          <span class="community-id" style="color:${color};">Community ${cid}</span>
+          <span class="community-size">${members.length} nodes</span>
+        </div>
+        <div class="community-members">${members.slice(0, 8).map(m => esc(m)).join(', ')}${members.length > 8 ? ' ...' : ''}</div>
+      </div>`;
+    });
+    if (sorted.length > 20) html += `<div style="color:var(--text-muted);font-size:10px;padding:4px;">+${sorted.length - 20} more</div>`;
+    html += '</div>';
+    document.getElementById('communities-result').innerHTML = html;
+
+    showToast(`${count} communities detected (modularity: ${modularity})`, 'success');
+    drawGraph();
+  } catch(e) { showToast('Communities failed: ' + e.message, 'error'); }
+}
+
+function highlightCommunity(cid) {
+  highlightedNodes.clear();
+  if (communityAssignments) {
+    Object.entries(communityAssignments).forEach(([label, c]) => {
+      if (c === cid) highlightedNodes.add(label);
+    });
+  }
+  drawGraph();
+}
+
+function clearCommunities() {
+  communityAssignments = null;
+  document.getElementById('btn-community').style.display = 'none';
+  document.getElementById('communities-result').innerHTML = '';
+  highlightedNodes.clear();
+  drawGraph();
+}
+
+let showCommunityColors = true;
+function toggleCommunityView() {
+  if (communityAssignments) {
+    showCommunityColors = !showCommunityColors;
+    if (!showCommunityColors) { communityAssignments = null; }
+  }
+  drawGraph();
+}
+
+// ── Explain Path ──────────────────────────────────────────────────
+async function doExplain() {
+  const from = document.getElementById('explain-from').value.trim();
+  const to = document.getElementById('explain-to').value.trim();
+  const maxPaths = parseInt(document.getElementById('explain-max').value) || 3;
+  if (!from || !to) return;
+  try {
+    const res = await fetch(`/explain?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&max_paths=${maxPaths}`);
+    const data = await res.json();
+    const paths = data.paths || [];
+
+    let html = '<div class="result-block">';
+    if (paths.length === 0) {
+      html += '<div style="color:var(--text-muted);">No path found</div>';
+    } else {
+      html += `<div style="margin-bottom:8px; color:var(--accent);">${paths.length} path(s) found</div>`;
+      paths.forEach((p, i) => {
+        const score = p.score ? ` (score: ${p.score.toFixed(3)})` : '';
+        html += `<div class="path-result"><strong>Path ${i+1}${score}</strong><br/>`;
+        const steps = p.steps || p.path || [];
+        steps.forEach((step, j) => {
+          if (j > 0) html += ' <span class="path-arrow">&rarr;</span> ';
+          if (step.edge) {
+            html += `<span class="path-edge" style="color:${CHANNEL_COLORS[step.edge] || '#888'}">${esc(step.edge)}</span> <span class="path-arrow">&rarr;</span> `;
+          }
+          html += `<span class="path-node" onclick="exploreNode('${esc(step.node || step)}')">${esc(step.node || step)}</span>`;
+        });
+        html += '</div>';
+      });
+    }
+    html += '</div>';
+    document.getElementById('explain-result').innerHTML = html;
+    showToast(`${paths.length} path(s) from ${from} to ${to}`, 'success');
+  } catch(e) { showToast('Explain failed: ' + e.message, 'error'); }
+}
+
+// ── Think (Graph of Thoughts) ─────────────────────────────────────
+async function doThink() {
+  const thought = document.getElementById('think-thought').value.trim();
+  if (!thought) return;
+  const depsStr = document.getElementById('think-deps').value.trim();
+  const depends_on = depsStr ? depsStr.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const conclusion = document.getElementById('think-conclusion').checked;
+  try {
+    await fetch('/think', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ thought, depends_on, conclusion }) });
+    showToast(`Thought recorded${conclusion ? ' (conclusion)' : ''}`, 'success');
+    document.getElementById('think-thought').value = '';
+    document.getElementById('think-deps').value = '';
+    document.getElementById('think-conclusion').checked = false;
+    refreshGraph();
+  } catch(e) { showToast('Think failed: ' + e.message, 'error'); }
+}
+
+// ── Correct Edge ──────────────────────────────────────────────────
+async function doCorrect() {
+  const from = document.getElementById('correct-from').value.trim();
+  const to = document.getElementById('correct-to').value.trim();
+  const new_confidence = parseFloat(document.getElementById('correct-conf').value);
+  const reason = document.getElementById('correct-reason').value.trim();
+  if (!from || !to) return;
+  try {
+    const res = await fetch('/correct', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ from, to, new_confidence, reason }) });
+    const data = await res.json();
+    showToast(data.message || `Corrected ${from} → ${to}`, 'success');
+    refreshGraph();
+  } catch(e) { showToast('Correct failed: ' + e.message, 'error'); }
+}
+
+// ── Validate Edge ─────────────────────────────────────────────────
+async function doValidate() {
+  const from = document.getElementById('validate-from').value.trim();
+  const to = document.getElementById('validate-to').value.trim();
+  const source = document.getElementById('validate-source').value.trim();
+  if (!from || !to) return;
+  try {
+    const body = { from, to };
+    if (source) body.source = source;
+    const res = await fetch('/validate', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body) });
+    const data = await res.json();
+    showToast(data.message || `Validated ${from} → ${to}`, 'success');
+    refreshGraph();
+  } catch(e) { showToast('Validate failed: ' + e.message, 'error'); }
+}
+
+// ── Merge Nodes ───────────────────────────────────────────────────
+async function doMerge() {
+  const keep = document.getElementById('merge-keep').value.trim();
+  const absorb = document.getElementById('merge-absorb').value.trim();
+  const reason = document.getElementById('merge-reason').value.trim();
+  if (!keep || !absorb) return;
+  if (!confirm(`Merge "${absorb}" into "${keep}"? This cannot be undone.`)) return;
+  try {
+    const res = await fetch('/merge', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ keep, absorb, reason }) });
+    const data = await res.json();
+    showToast(data.message || `Merged ${absorb} into ${keep}`, 'success');
+    refreshGraph();
+  } catch(e) { showToast('Merge failed: ' + e.message, 'error'); }
+}
+
+// ── Compact (Save Session) ────────────────────────────────────────
+async function doCompact() {
+  const summary = document.getElementById('compact-summary').value.trim();
+  if (!summary) return;
+  const entStr = document.getElementById('compact-entities').value.trim();
+  const decStr = document.getElementById('compact-decisions').value.trim();
+  const entities = entStr ? entStr.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const decisions = decStr ? decStr.split(',').map(s => s.trim()).filter(Boolean) : [];
+  try {
+    const res = await fetch('/compact', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ summary, entities, decisions }) });
+    const data = await res.json();
+    showToast(data.message || 'Session saved', 'success');
+    document.getElementById('compact-summary').value = '';
+    document.getElementById('compact-entities').value = '';
+    document.getElementById('compact-decisions').value = '';
+    refreshGraph();
+  } catch(e) { showToast('Compact failed: ' + e.message, 'error'); }
+}
+
+// ── Session Restore ───────────────────────────────────────────────
+async function doSessionRestore() {
+  const query = document.getElementById('restore-query').value.trim();
+  if (!query) return;
+  try {
+    const res = await fetch(`/session-restore?query=${encodeURIComponent(query)}&limit=5`);
+    const data = await res.json();
+    const sessions = data.sessions || [];
+    let html = '<div class="result-block">';
+    if (sessions.length === 0) {
+      html += '<div style="color:var(--text-muted);">No sessions found</div>';
+    } else {
+      sessions.forEach(s => {
+        html += `<div class="community-card">
+          <div class="community-header">
+            <span class="community-id">${esc(s.label || s.session_id || '?')}</span>
+          </div>
+          <div class="community-members">${esc(s.summary || s.content || '')}</div>
+          ${s.entities ? `<div style="margin-top:4px; font-size:10px; color:var(--accent);">Entities: ${s.entities.map(e => esc(e)).join(', ')}</div>` : ''}
+          ${s.decisions ? `<div style="margin-top:2px; font-size:10px; color:var(--success);">Decisions: ${s.decisions.map(d => esc(d)).join(', ')}</div>` : ''}
+        </div>`;
+      });
+    }
+    html += '</div>';
+    document.getElementById('restore-result').innerHTML = html;
+  } catch(e) { showToast('Session restore failed: ' + e.message, 'error'); }
+}
+
+// ── Context Query ─────────────────────────────────────────────────
+async function doContext() {
+  const query = document.getElementById('context-query').value.trim();
+  if (!query) return;
+  const max_tokens = parseInt(document.getElementById('context-tokens').value) || 2000;
+  try {
+    const res = await fetch('/context', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ query, max_tokens }) });
+    const data = await res.json();
+    const context = data.context || data.text || JSON.stringify(data, null, 2);
+    const tokens = data.estimated_tokens || '?';
+    let html = `<div class="result-block">
+      <div style="margin-bottom:6px; color:var(--accent); font-size:10px;">
+        Tokens: <strong>${tokens}</strong> / ${max_tokens} budget
+      </div>
+      <div class="conf-bar"><div class="conf-bar-fill" style="width:${Math.min(100, (tokens/max_tokens)*100)}%; background:${tokens > max_tokens*0.9 ? 'var(--danger)' : 'var(--accent)'};"></div></div>
+      <pre style="margin-top:8px; white-space:pre-wrap; font-size:11px; color:var(--text-dim); max-height:200px; overflow-y:auto;">${esc(typeof context === 'string' ? context : JSON.stringify(context, null, 2))}</pre>
+    </div>`;
+    document.getElementById('context-result').innerHTML = html;
+  } catch(e) { showToast('Context query failed: ' + e.message, 'error'); }
+}
+
+// ── Detail panel: add correct/validate buttons for edges ──────────
+function addFeedbackButtons(fromLabel, toLabel) {
+  return `<div class="btn-group" style="margin-top:4px;">
+    <button class="btn btn-sm btn-success" onclick="quickValidate('${esc(fromLabel)}','${esc(toLabel)}')">Validate</button>
+    <button class="btn btn-sm btn-warning" onclick="quickCorrect('${esc(fromLabel)}','${esc(toLabel)}')">Correct</button>
+  </div>`;
+}
+
+async function quickValidate(from, to) {
+  try {
+    await fetch('/validate', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ from, to }) });
+    showToast(`Validated: ${from} → ${to}`, 'success');
+  } catch(e) { showToast('Validate failed', 'error'); }
+}
+
+async function quickCorrect(from, to) {
+  const conf = prompt('New confidence (0.0-1.0):', '0.3');
+  if (conf === null) return;
+  try {
+    await fetch('/correct', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ from, to, new_confidence: parseFloat(conf), reason: 'Manual correction from dashboard' }) });
+    showToast(`Corrected: ${from} → ${to} → ${conf}`, 'success');
+  } catch(e) { showToast('Correct failed', 'error'); }
+}
+
+// ── Prefill helpers from detail panel ──────────────────────────────
+function prefillExplainFrom(label) {
+  document.getElementById('explain-from').value = label;
+  // Switch to tools tab
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector('[data-tab="tools"]').classList.add('active');
+  document.getElementById('tab-tools').classList.add('active');
+  document.getElementById('explain-to').focus();
+}
+
+function prefillMerge(label) {
+  document.getElementById('merge-keep').value = label;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector('[data-tab="tools"]').classList.add('active');
+  document.getElementById('tab-tools').classList.add('active');
+  document.getElementById('merge-absorb').focus();
+}
 
 // Keyboard
 document.addEventListener('keydown', (e) => {

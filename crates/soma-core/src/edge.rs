@@ -4,6 +4,48 @@ use serde::{Deserialize, Serialize};
 use crate::channel::Channel;
 use crate::ids::{EdgeId, NodeId};
 
+/// Provenance tracks how an edge was created/validated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Provenance {
+    /// Created by human input
+    Human,
+    /// Inferred by AI (not yet validated)
+    AiInferred,
+    /// Validated by AI against external source
+    AiValidated,
+    /// Automated extraction (ingestion pipeline, code analysis)
+    Automated,
+}
+
+impl Default for Provenance {
+    fn default() -> Self {
+        Provenance::Automated
+    }
+}
+
+impl std::fmt::Display for Provenance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Provenance::Human => write!(f, "human"),
+            Provenance::AiInferred => write!(f, "ai_inferred"),
+            Provenance::AiValidated => write!(f, "ai_validated"),
+            Provenance::Automated => write!(f, "automated"),
+        }
+    }
+}
+
+impl Provenance {
+    pub fn from_str_name(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "human" => Some(Provenance::Human),
+            "ai_inferred" | "aiinferred" => Some(Provenance::AiInferred),
+            "ai_validated" | "aivalidated" => Some(Provenance::AiValidated),
+            "automated" => Some(Provenance::Automated),
+            _ => None,
+        }
+    }
+}
+
 /// A living edge in the SOMA knowledge graph.
 ///
 /// Edges have biological properties: intensity decays over time (evaporation),
@@ -34,6 +76,10 @@ pub struct StigreEdge {
 
     /// Optional human-readable label
     pub label: Option<String>,
+
+    /// How this edge was created/validated
+    #[serde(default)]
+    pub provenance: Provenance,
 }
 
 impl StigreEdge {
@@ -57,6 +103,7 @@ impl StigreEdge {
             confidence: confidence.clamp(0.0, 1.0),
             source,
             label: None,
+            provenance: Provenance::default(),
         }
     }
 

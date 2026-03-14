@@ -10,12 +10,15 @@
 //! Intelligent chunking with overlap for context preservation.
 
 mod chunker;
+pub mod code;
 pub mod ner;
 mod patterns;
 mod pipeline;
+pub mod plugin;
 mod source;
 
 pub use chunker::Chunker;
 pub use patterns::PatternExtractor;
 pub use pipeline::{IngestPipeline, IngestResult, Triplet};
+pub use plugin::{IngestPlugin, PluginRegistry, PluginResult};
 pub use source::IngestSource;

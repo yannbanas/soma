@@ -21,6 +21,8 @@ soma-llm    = { workspace = true }
 soma-mcp    = { workspace = true }
 soma-http   = { workspace = true }
 soma-watch  = { workspace = true }
+soma-cypher = { workspace = true }
+petgraph    = { workspace = true }
 clap        = { workspace = true }
 colored     = { workspace = true }
 tokio       = { workspace = true }

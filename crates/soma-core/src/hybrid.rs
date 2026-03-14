@@ -113,22 +113,123 @@ pub fn rrf_merge_with_specificity(
     results
 }
 
+/// Re-rank results with temporal boost and specificity.
+///
+/// - `recency_boost = 1.0 + 0.5 × e^(-hours_since_last_touch / 168)` (1 week half-life)
+/// - Final score = rrf_score × recency_boost × specificity
+pub fn rerank_temporal(
+    results: &mut [HybridResult],
+    last_touch_hours: &HashMap<String, f64>,
+    specificity: &HashMap<String, f32>,
+) {
+    for r in results.iter_mut() {
+        let hours = last_touch_hours.get(&r.label).copied().unwrap_or(168.0);
+        let recency = 1.0 + 0.5 * (-hours / 168.0).exp() as f32;
+        let spec = specificity.get(&r.label).copied().unwrap_or(0.5);
+        r.score *= recency * spec;
+    }
+    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+}
+
+/// MMR (Maximal Marginal Relevance) diversification.
+///
+/// Selects items iteratively: each new item maximizes
+/// `λ × relevance - (1-λ) × max_similarity_to_selected`.
+///
+/// Similarity is approximated by label overlap (Jaccard of words).
+/// λ=0.7 means 70% relevance, 30% diversity.
+pub fn mmr_diversify(results: &[HybridResult], limit: usize, lambda: f32) -> Vec<HybridResult> {
+    if results.is_empty() || limit == 0 {
+        return Vec::new();
+    }
+
+    let mut selected: Vec<HybridResult> = Vec::with_capacity(limit);
+    let mut remaining: Vec<&HybridResult> = results.iter().collect();
+
+    // Always pick the top result first
+    selected.push(remaining.remove(0).clone());
+
+    while selected.len() < limit && !remaining.is_empty() {
+        let mut best_idx = 0;
+        let mut best_mmr = f32::NEG_INFINITY;
+
+        for (i, candidate) in remaining.iter().enumerate() {
+            let relevance = candidate.score;
+            let max_sim = selected.iter()
+                .map(|s| word_jaccard(&candidate.label, &s.label))
+                .fold(0.0f32, f32::max);
+            let mmr = lambda * relevance - (1.0 - lambda) * max_sim;
+            if mmr > best_mmr {
+                best_mmr = mmr;
+                best_idx = i;
+            }
+        }
+
+        selected.push(remaining.remove(best_idx).clone());
+    }
+
+    selected
+}
+
+/// Word-level Jaccard similarity between two labels.
+fn word_jaccard(a: &str, b: &str) -> f32 {
+    let a_lower = a.to_lowercase();
+    let b_lower = b.to_lowercase();
+    let a_words: std::collections::HashSet<&str> = a_lower.split_whitespace().collect();
+    let b_words: std::collections::HashSet<&str> = b_lower.split_whitespace().collect();
+    if a_words.is_empty() && b_words.is_empty() { return 1.0; }
+    let intersection = a_words.intersection(&b_words).count() as f32;
+    let union = a_words.union(&b_words).count() as f32;
+    if union == 0.0 { 0.0 } else { intersection / union }
+}
+
+/// Strip accents/diacritics from a string for accent-insensitive comparison.
+/// "Spéléologie" → "speleologie", "créé" → "cree"
+fn fold_accents(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            'à' | 'â' | 'ä' | 'á' | 'ã' => 'a',
+            'é' | 'è' | 'ê' | 'ë' => 'e',
+            'î' | 'ï' | 'í' => 'i',
+            'ô' | 'ö' | 'ó' | 'õ' => 'o',
+            'ù' | 'û' | 'ü' | 'ú' => 'u',
+            'ÿ' | 'ý' => 'y',
+            'ç' => 'c',
+            'ñ' => 'n',
+            'À' | 'Â' | 'Ä' | 'Á' | 'Ã' => 'a',
+            'É' | 'È' | 'Ê' | 'Ë' => 'e',
+            'Î' | 'Ï' | 'Í' => 'i',
+            'Ô' | 'Ö' | 'Ó' | 'Õ' => 'o',
+            'Ù' | 'Û' | 'Ü' | 'Ú' => 'u',
+            'Ÿ' | 'Ý' => 'y',
+            'Ç' => 'c',
+            'Ñ' => 'n',
+            _ => c,
+        })
+        .collect()
+}
+
 /// Fuzzy label search — exact, prefix, and substring matching with scoring.
+/// Supports accent-insensitive matching (e.g. "speleo" matches "Spéléologie").
 ///
 /// Scoring:
 /// - Exact match (case-insensitive) → 1.0
 /// - Prefix match → 0.9
 /// - Contains match → 0.7
+/// - Word prefix match → 0.6
+/// - Accent-folded variants → same scores with -0.05 penalty
 pub fn fuzzy_label_search(query: &str, labels: &[String], limit: usize) -> Vec<(String, f32)> {
     if query.trim().is_empty() {
         return Vec::new();
     }
     let query_lower = query.to_lowercase();
+    let query_folded = fold_accents(&query_lower);
     let mut results: Vec<(String, f32)> = Vec::new();
 
     for label in labels {
         let label_lower = label.to_lowercase();
 
+        // First try exact (case-insensitive) matching
         let score = if label_lower == query_lower {
             1.0
         } else if label_lower.starts_with(&query_lower) {
@@ -136,14 +237,30 @@ pub fn fuzzy_label_search(query: &str, labels: &[String], limit: usize) -> Vec<(
         } else if label_lower.contains(&query_lower) {
             0.7
         } else if query_lower.len() >= 3 {
-            // Check if any word in the label starts with the query
             let has_word_prefix = label_lower
                 .split_whitespace()
                 .any(|w| w.starts_with(&query_lower));
             if has_word_prefix {
                 0.6
             } else {
-                continue;
+                // Try accent-folded matching
+                let label_folded = fold_accents(&label_lower);
+                if label_folded == query_folded {
+                    0.95  // almost exact, just accent difference
+                } else if label_folded.starts_with(&query_folded) {
+                    0.85
+                } else if label_folded.contains(&query_folded) {
+                    0.65
+                } else {
+                    let has_folded_prefix = label_folded
+                        .split_whitespace()
+                        .any(|w| w.starts_with(&query_folded));
+                    if has_folded_prefix {
+                        0.55
+                    } else {
+                        continue;
+                    }
+                }
             }
         } else {
             continue;
@@ -282,6 +399,25 @@ mod tests {
         // Leaf: RRF * (0.7 + 0.3*1.0) = RRF * 1.0
         // So the leaf gets a bigger boost factor
         assert!(leaf_score / hub_score > 0.5, "specificity should boost leaf relative to hub");
+    }
+
+    #[test]
+    fn fuzzy_accent_insensitive() {
+        let labels = vec![
+            "Spéléologie".to_string(),
+            "spéléologie".to_string(),
+        ];
+        let results = fuzzy_label_search("speleo", &labels, 10);
+        assert!(!results.is_empty(), "speleo should match Spéléologie");
+        assert_eq!(results[0].0, "Spéléologie");
+    }
+
+    #[test]
+    fn fuzzy_accent_folding_exact() {
+        let labels = vec!["créé".to_string()];
+        let results = fuzzy_label_search("cree", &labels, 10);
+        assert_eq!(results.len(), 1);
+        assert!(results[0].1 > 0.9, "accent-folded exact should score high");
     }
 
     #[test]

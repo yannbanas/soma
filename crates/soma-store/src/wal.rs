@@ -24,6 +24,8 @@ pub enum WalEntry {
         episodes_merged: u32,
         concepts_created: u32,
     },
+    /// Free-form log entry for corrections, merges, etc.
+    Custom(String),
 }
 
 /// Append-only WAL writer with fsync for crash safety.

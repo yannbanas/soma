@@ -147,6 +147,14 @@ enum Commands {
         #[arg(long, short = 'o')]
         output: Option<PathBuf>,
     },
+    /// Import a knowledge graph from a JSON export
+    Import {
+        /// Path to the JSON file to import
+        file: PathBuf,
+        /// Merge with existing graph instead of replacing
+        #[arg(long)]
+        merge: bool,
+    },
     /// Forget (archive) a node
     Forget {
         /// Label of node to forget
@@ -187,6 +195,17 @@ enum Commands {
         /// Enable REST API on this port (e.g. --http 8080)
         #[arg(long)]
         http: Option<u16>,
+    },
+    /// Ingest Rust source code into the graph
+    #[command(name = "ingest-code")]
+    IngestCode {
+        /// Directory containing Rust source files
+        path: PathBuf,
+    },
+    /// Execute a Cypher query against the graph
+    Cypher {
+        /// Cypher query string
+        query: String,
     },
 }
 
@@ -369,6 +388,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Export { format, output } => {
             cmd_export(&graph, &format, output).await?;
         }
+        Commands::Import { file, merge } => {
+            cmd_import(&graph, &hdc, &store, &file, merge).await?;
+            maybe_snapshot(&graph, &hdc, &store).await?;
+        }
         Commands::Forget { label } => {
             cmd_forget(&graph, &store, &label).await?;
             maybe_snapshot(&graph, &hdc, &store).await?;
@@ -410,6 +433,52 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Daemon { http } => {
             cmd_daemon(graph.clone(), hdc.clone(), store.clone(), &config, http, llm_client.clone()).await?;
+        }
+        Commands::IngestCode { path } => {
+            println!("{}", "Ingesting Rust source code...".cyan());
+            let mut g = graph.write().await;
+            let result = soma_ingest::code::ingest_rust_directory(&mut g, &path, "cli/ingest-code");
+            drop(g);
+            println!("{} {} files, {} functions, {} structs, {} traits, {} edges",
+                "✓".green(),
+                result.files_processed,
+                result.functions_found,
+                result.structs_found,
+                result.traits_found,
+                result.edges_created,
+            );
+            save_snapshot(&graph, &hdc, &store).await?;
+        }
+        Commands::Cypher { query } => {
+            let mut g = graph.write().await;
+            match soma_cypher::CypherExecutor::execute(&mut g, &query) {
+                Ok(result) => {
+                    if let Some(msg) = &result.message {
+                        println!("{}", msg.green());
+                    }
+                    if !result.columns.is_empty() {
+                        // Print header
+                        println!("{}", result.columns.join(" | ").bold());
+                        println!("{}", "-".repeat(result.columns.len() * 15));
+                        // Print rows
+                        for row in &result.rows {
+                            let cols: Vec<String> = row.iter().map(|v| match v {
+                                soma_cypher::CypherValue::String(s) => s.clone(),
+                                soma_cypher::CypherValue::Float(f) => format!("{:.3}", f),
+                                soma_cypher::CypherValue::Int(i) => i.to_string(),
+                                soma_cypher::CypherValue::Bool(b) => b.to_string(),
+                                soma_cypher::CypherValue::Null => "null".into(),
+                                soma_cypher::CypherValue::Node(n) => format!("({}:{})", n.label, n.kind),
+                            }).collect();
+                            println!("{}", cols.join(" | "));
+                        }
+                        println!("\n{} row(s)", result.rows.len());
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                }
+            }
         }
     }
 
@@ -467,7 +536,7 @@ fn replay_wal_entry(graph: &mut StigreGraph, entry: &soma_store::WalEntry) {
         soma_store::WalEntry::EdgePrune(_) | soma_store::WalEntry::NodeArchive(_) => {
             // These are informational during replay
         }
-        soma_store::WalEntry::ConsolidationEvent { .. } => {
+        soma_store::WalEntry::ConsolidationEvent { .. } | soma_store::WalEntry::Custom(_) => {
             // Informational
         }
     }
@@ -1458,6 +1527,91 @@ async fn cmd_export(
     } else {
         println!("{}", content);
     }
+    Ok(())
+}
+
+async fn cmd_import(
+    graph: &Arc<RwLock<StigreGraph>>,
+    hdc: &Arc<RwLock<HdcEngine>>,
+    store: &Arc<RwLock<Store>>,
+    file: &std::path::Path,
+    merge: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if !file.exists() {
+        return Err(format!("file not found: {}", file.display()).into());
+    }
+
+    let content = std::fs::read_to_string(file)?;
+    let imported_graph: petgraph::graph::DiGraph<soma_core::SomaNode, soma_core::StigreEdge> =
+        serde_json::from_str(&content)
+            .map_err(|e| format!("invalid JSON graph: {}", e))?;
+
+    if merge {
+        // Merge mode: add imported nodes/edges into existing graph
+        let mut g = graph.write().await;
+        let mut nodes_added = 0usize;
+        let mut edges_added = 0usize;
+
+        // First pass: upsert all nodes
+        for node in imported_graph.node_weights() {
+            g.upsert_node(&node.label, node.kind.clone());
+            nodes_added += 1;
+        }
+
+        // Second pass: upsert all edges
+        for edge_idx in imported_graph.edge_indices() {
+            if let (Some(from_idx), Some(to_idx)) = (
+                imported_graph.edge_endpoints(edge_idx).map(|(a, _)| a),
+                imported_graph.edge_endpoints(edge_idx).map(|(_, b)| b),
+            ) {
+                let edge = &imported_graph[edge_idx];
+                let from_node = &imported_graph[from_idx];
+                let to_node = &imported_graph[to_idx];
+
+                let from_id = g.upsert_node(&from_node.label, from_node.kind.clone());
+                let to_id = g.upsert_node(&to_node.label, to_node.kind.clone());
+                g.upsert_edge(from_id, to_id, edge.channel.clone(), edge.confidence, &edge.source);
+                edges_added += 1;
+            }
+        }
+
+        // Retrain HDC with new labels
+        let all_labels = g.all_labels();
+        drop(g);
+        let mut h = hdc.write().await;
+        h.train(&all_labels);
+
+        eprintln!(
+            "{} Merged {} nodes, {} edges from {}",
+            "✓".green(),
+            nodes_added,
+            edges_added,
+            file.display()
+        );
+    } else {
+        // Replace mode: overwrite entire graph
+        let mut g = graph.write().await;
+        g.set_inner(imported_graph);
+        let stats = g.stats();
+
+        // Retrain HDC
+        let all_labels = g.all_labels();
+        drop(g);
+        let mut h = hdc.write().await;
+        h.train(&all_labels);
+
+        eprintln!(
+            "{} Imported {} nodes, {} edges from {} (replaced graph)",
+            "✓".green(),
+            stats.nodes,
+            stats.edges,
+            file.display()
+        );
+    }
+
+    // Write snapshot to persist the import
+    eprintln!("{} Saving snapshot...", "→".cyan());
+
     Ok(())
 }
 

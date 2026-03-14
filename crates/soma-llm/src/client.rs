@@ -357,11 +357,11 @@ mod tests {
     #[test]
     fn client_with_separate_embedding_model() {
         let config = LlmSection {
-            embedding_model: Some("nomic-embed-text".to_string()),
+            embedding_model: Some("embeddinggemma:300m".to_string()),
             ..Default::default()
         };
         let client = OllamaClient::from_config(&config);
         assert_eq!(client.model, "cogito:8b");
-        assert_eq!(client.embedding_model, "nomic-embed-text");
+        assert_eq!(client.embedding_model, "embeddinggemma:300m");
     }
 }

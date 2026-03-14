@@ -440,7 +440,7 @@ chunk_overlap = 1                   # overlap between chunks
 enabled = false                     # set true for L2 extraction + neural embeddings
 provider = "ollama"
 model = "cogito:8b"                 # triplet extraction model
-embedding_model = "nomic-embed-text"  # neural embedding model
+embedding_model = "embeddinggemma:300m"  # neural embedding model
 endpoint = "http://localhost:11434"
 timeout_ms = 30000
 
