@@ -36,19 +36,16 @@ pub fn extract_query_entities(query: &str) -> Vec<String> {
 
     // 2. Extract capitalized sequences from unquoted text
     let stop_words = [
-        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-        "have", "has", "had", "do", "does", "did", "will", "would", "could",
-        "should", "may", "might", "shall", "can", "need", "dare", "ought",
-        "used", "to", "of", "in", "for", "on", "with", "at", "by", "from",
-        "as", "into", "through", "during", "before", "after", "above", "below",
-        "between", "out", "off", "over", "under", "again", "further", "then",
-        "once", "here", "there", "when", "where", "why", "how", "all", "both",
-        "each", "few", "more", "most", "other", "some", "such", "no", "nor",
-        "not", "only", "own", "same", "so", "than", "too", "very", "just",
-        "because", "but", "and", "or", "if", "while", "what", "which", "who",
-        "whom", "this", "that", "these", "those", "i", "me", "my", "myself",
-        "we", "our", "you", "your", "he", "him", "his", "she", "her", "it",
-        "its", "they", "them", "their",
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
+        "do", "does", "did", "will", "would", "could", "should", "may", "might", "shall", "can",
+        "need", "dare", "ought", "used", "to", "of", "in", "for", "on", "with", "at", "by", "from",
+        "as", "into", "through", "during", "before", "after", "above", "below", "between", "out",
+        "off", "over", "under", "again", "further", "then", "once", "here", "there", "when",
+        "where", "why", "how", "all", "both", "each", "few", "more", "most", "other", "some",
+        "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "just",
+        "because", "but", "and", "or", "if", "while", "what", "which", "who", "whom", "this",
+        "that", "these", "those", "i", "me", "my", "myself", "we", "our", "you", "your", "he",
+        "him", "his", "she", "her", "it", "its", "they", "them", "their",
     ];
 
     let words: Vec<&str> = query.split_whitespace().collect();
@@ -103,10 +100,14 @@ pub fn extract_query_entities(query: &str) -> Vec<String> {
 
     // 3. Extract non-stopword tokens (>= 4 chars) as potential entities
     for word in &words {
-        let clean = word.trim_matches(|c: char| !c.is_alphanumeric()).to_string();
+        let clean = word
+            .trim_matches(|c: char| !c.is_alphanumeric())
+            .to_string();
         if clean.len() >= 4
             && !stop_words.contains(&clean.to_lowercase().as_str())
-            && !entities.iter().any(|e| e.to_lowercase().contains(&clean.to_lowercase()))
+            && !entities
+                .iter()
+                .any(|e| e.to_lowercase().contains(&clean.to_lowercase()))
         {
             entities.push(clean);
         }
@@ -114,7 +115,9 @@ pub fn extract_query_entities(query: &str) -> Vec<String> {
 
     // 4. Fallback: if no capitalized entities found, extract consecutive non-stop bigrams/trigrams
     //    from lowercase text (handles "who founded acme corp?" → "acme corp")
-    let has_capitalized = entities.iter().any(|e| e.chars().next().map(|c| c.is_uppercase()).unwrap_or(false));
+    let has_capitalized = entities
+        .iter()
+        .any(|e| e.chars().next().map(|c| c.is_uppercase()).unwrap_or(false));
     if !has_capitalized {
         let content_words: Vec<&str> = words
             .iter()
@@ -127,7 +130,9 @@ pub fn extract_query_entities(query: &str) -> Vec<String> {
                 for chunk in content_words.windows(window) {
                     let phrase = chunk.join(" ");
                     if phrase.len() >= 4
-                        && !entities.iter().any(|e| e.to_lowercase() == phrase.to_lowercase())
+                        && !entities
+                            .iter()
+                            .any(|e| e.to_lowercase() == phrase.to_lowercase())
                     {
                         entities.push(phrase);
                     }
@@ -176,8 +181,10 @@ mod tests {
             let words: Vec<&str> = e.split_whitespace().collect();
             words.iter().all(|w| {
                 let lower = w.to_lowercase();
-                !["the", "a", "an", "is", "are", "was", "to", "of", "in", "for", "do", "this"]
-                    .contains(&lower.as_str())
+                ![
+                    "the", "a", "an", "is", "are", "was", "to", "of", "in", "for", "do", "this",
+                ]
+                .contains(&lower.as_str())
                     || words.len() > 1
             })
         }));

@@ -90,15 +90,25 @@ fn main() {
 
     md.push_str("# SOMA Benchmark Results\n\n");
     let mut config_parts = vec!["NER (L1.5)", "Pattern extraction (L1)"];
-    if llm_client.is_some() { config_parts.push("LLM cogito:8b (L2)"); }
-    if embed_client.is_some() { config_parts.push("Neural embeddings (embeddinggemma:300m)"); }
+    if llm_client.is_some() {
+        config_parts.push("LLM cogito:8b (L2)");
+    }
+    if embed_client.is_some() {
+        config_parts.push("Neural embeddings (embeddinggemma:300m)");
+    }
     config_parts.push("5-path hybrid search + weighted RRF");
-    md.push_str(&format!("**Configuration**: {}\n\n", config_parts.join(" + ")));
+    md.push_str(&format!(
+        "**Configuration**: {}\n\n",
+        config_parts.join(" + ")
+    ));
 
     // ═══════════════════════════════════════════════════════════════
     // 1. TEMPORAL BENCHMARK (always runs — synthetic, no data needed)
     // ═══════════════════════════════════════════════════════════════
-    println!("[1/4] Running temporal benchmark (40 queries, k={})...", temporal_k);
+    println!(
+        "[1/4] Running temporal benchmark (40 queries, k={})...",
+        temporal_k
+    );
     let (temp_acc, temp_results) = run_temporal_benchmark(temporal_k);
     let temp_data = build_temporal_section(&mut md, &temp_results, temp_acc, temporal_k, verbose);
     json.insert("temporal".into(), temp_data);
@@ -114,7 +124,13 @@ fn main() {
         match loader::load_musique(musique_path, limit) {
             Ok(questions) => {
                 let config = BenchConfig::default();
-                let report = runner::run_benchmark_full(&questions, &config, "MuSiQue", llm_client.as_ref(), embed_client.as_ref());
+                let report = runner::run_benchmark_full(
+                    &questions,
+                    &config,
+                    "MuSiQue",
+                    llm_client.as_ref(),
+                    embed_client.as_ref(),
+                );
                 let elapsed = start.elapsed();
                 build_dataset_section(&mut md, &report, elapsed);
                 json.insert("musique".into(), report_to_json(&report, elapsed));
@@ -133,7 +149,10 @@ fn main() {
             }
         }
     } else if !skip_datasets {
-        println!("[2/4] Skipping MuSiQue — dataset not found at {}", musique_path.display());
+        println!(
+            "[2/4] Skipping MuSiQue — dataset not found at {}",
+            musique_path.display()
+        );
         md.push_str("## MuSiQue\n\n*Dataset not found. See `crates/soma-bench/data/README.md` for download instructions.*\n\n");
     } else {
         println!("[2/4] Skipping MuSiQue (--skip-datasets)");
@@ -149,7 +168,13 @@ fn main() {
         match loader::load_hotpotqa(hotpot_path, limit) {
             Ok(questions) => {
                 let config = BenchConfig::default();
-                let report = runner::run_benchmark_full(&questions, &config, "HotpotQA", llm_client.as_ref(), embed_client.as_ref());
+                let report = runner::run_benchmark_full(
+                    &questions,
+                    &config,
+                    "HotpotQA",
+                    llm_client.as_ref(),
+                    embed_client.as_ref(),
+                );
                 let elapsed = start.elapsed();
                 build_dataset_section(&mut md, &report, elapsed);
                 json.insert("hotpotqa".into(), report_to_json(&report, elapsed));
@@ -168,7 +193,10 @@ fn main() {
             }
         }
     } else if !skip_datasets {
-        println!("[3/4] Skipping HotpotQA — dataset not found at {}", hotpot_path.display());
+        println!(
+            "[3/4] Skipping HotpotQA — dataset not found at {}",
+            hotpot_path.display()
+        );
         md.push_str("## HotpotQA\n\n*Dataset not found. See `crates/soma-bench/data/README.md` for download instructions.*\n\n");
     } else {
         println!("[3/4] Skipping HotpotQA (--skip-datasets)");
@@ -185,7 +213,10 @@ fn main() {
     if let Some(data) = ablation_data {
         json.insert("ablation".into(), data);
     }
-    println!("  => Ablation done ({:.1}s)", ablation_elapsed.as_secs_f64());
+    println!(
+        "  => Ablation done ({:.1}s)",
+        ablation_elapsed.as_secs_f64()
+    );
 
     // ═══════════════════════════════════════════════════════════════
     // WRITE OUTPUT FILES
@@ -199,14 +230,23 @@ fn main() {
     // RESULTS.md
     let md_path = out_dir.join("RESULTS.md");
     let mut f = fs::File::create(&md_path).expect("Failed to create RESULTS.md");
-    f.write_all(md.as_bytes()).expect("Failed to write RESULTS.md");
+    f.write_all(md.as_bytes())
+        .expect("Failed to write RESULTS.md");
     println!("\nWrote {}", md_path.display());
 
     // temporal_chart.svg
-    let categories = ["CEO Succession", "Version Updates", "Location Changes", "Status Changes"];
+    let categories = [
+        "CEO Succession",
+        "Version Updates",
+        "Location Changes",
+        "Status Changes",
+    ];
     let mut cat_acc = [0.0f32; 4];
     for (i, chunk) in temp_results.chunks(10).enumerate() {
-        let total = chunk.iter().filter(|(r, s)| r.is_some() || s.is_some()).count();
+        let total = chunk
+            .iter()
+            .filter(|(r, s)| r.is_some() || s.is_some())
+            .count();
         let correct = chunk
             .iter()
             .filter(|(r, s)| match (r, s) {
@@ -415,10 +455,7 @@ fn build_dataset_section(
     ));
 }
 
-fn report_to_json(
-    report: &runner::BenchReport,
-    elapsed: std::time::Duration,
-) -> serde_json::Value {
+fn report_to_json(report: &runner::BenchReport, elapsed: std::time::Duration) -> serde_json::Value {
     serde_json::json!({
         "dataset": report.dataset,
         "num_questions": report.num_questions,
@@ -434,7 +471,11 @@ fn report_to_json(
 
 // ── Ablation section ─────────────────────────────────────────────
 
-fn run_ablation_section(md: &mut String, limit: usize, llm_client: Option<&OllamaClient>) -> Option<serde_json::Value> {
+fn run_ablation_section(
+    md: &mut String,
+    limit: usize,
+    llm_client: Option<&OllamaClient>,
+) -> Option<serde_json::Value> {
     use soma_graph::StigreGraph;
     use soma_hdc::HdcEngine;
     use soma_ingest::IngestPipeline;
@@ -515,10 +556,11 @@ fn run_ablation_section(md: &mut String, limit: usize, llm_client: Option<&Ollam
     }
     md.push('\n');
 
-    if let Some(best) = reports
-        .values()
-        .max_by(|a, b| a.entity_recall_at_10.partial_cmp(&b.entity_recall_at_10).unwrap())
-    {
+    if let Some(best) = reports.values().max_by(|a, b| {
+        a.entity_recall_at_10
+            .partial_cmp(&b.entity_recall_at_10)
+            .unwrap()
+    }) {
         md.push_str(&format!(
             "> **Best config**: `{}` with ER@10={:.1}%\n\n",
             best.config_name,
@@ -590,11 +632,7 @@ fn generate_synthetic_questions() -> Vec<loader::BenchQuestion> {
 
 // ── SVG Charts ───────────────────────────────────────────────────
 
-fn generate_bar_chart_svg(
-    _categories: &[&str; 4],
-    accuracies: &[f32; 4],
-    overall: f32,
-) -> String {
+fn generate_bar_chart_svg(_categories: &[&str; 4], accuracies: &[f32; 4], overall: f32) -> String {
     let width = 600;
     let height = 400;
     let ml = 160;
@@ -631,14 +669,23 @@ fn generate_bar_chart_svg(
             r#"  <line x1="{:.0}" y1="{}" x2="{:.0}" y2="{}" class="grid"/>
   <text x="{:.0}" y="{}" class="tick">{}%</text>
 "#,
-            x, mt, x, mt + ch, x, mt + ch + 20, pct
+            x,
+            mt,
+            x,
+            mt + ch,
+            x,
+            mt + ch + 20,
+            pct
         ));
     }
 
     s.push_str(&format!(
         r#"  <line x1="{}" y1="{}" x2="{}" y2="{}" class="axis"/>
 "#,
-        ml, mt, ml, mt + ch
+        ml,
+        mt,
+        ml,
+        mt + ch
     ));
 
     let all_labels = [
@@ -695,10 +742,7 @@ fn generate_bar_chart_svg(
     s
 }
 
-fn generate_retrieval_chart_svg(
-    musique: &serde_json::Value,
-    hotpot: &serde_json::Value,
-) -> String {
+fn generate_retrieval_chart_svg(musique: &serde_json::Value, hotpot: &serde_json::Value) -> String {
     let metrics = [
         "entity_recall_at_2",
         "entity_recall_at_5",
@@ -740,20 +784,20 @@ fn generate_retrieval_chart_svg(
             r#"  <line x1="{}" y1="{}" x2="{}" y2="{}" class="grid"/>
   <text x="{}" y="{}" class="tick" text-anchor="end">{}%</text>
 "#,
-            ml, y, ml + cw, y, ml - 5, y + 4, pct
+            ml,
+            y,
+            ml + cw,
+            y,
+            ml - 5,
+            y + 4,
+            pct
         ));
     }
 
     for (i, (metric, label)) in metrics.iter().zip(labels.iter()).enumerate() {
         let gx = ml + (i as i32) * group_w + group_w / 2;
-        let m_val = musique
-            .get(metric)
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0) as f32;
-        let h_val = hotpot
-            .get(metric)
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0) as f32;
+        let m_val = musique.get(metric).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        let h_val = hotpot.get(metric).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
 
         let m_h = (m_val * ch as f32).max(1.0) as i32;
         let h_h = (h_val * ch as f32).max(1.0) as i32;

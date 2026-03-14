@@ -113,12 +113,12 @@ pub struct PropertyAccess {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompOp {
-    Eq,      // =
-    Neq,     // <>
-    Lt,      // <
-    Gt,      // >
-    Lte,     // <=
-    Gte,     // >=
+    Eq,  // =
+    Neq, // <>
+    Lt,  // <
+    Gt,  // >
+    Lte, // <=
+    Gte, // >=
 }
 
 /// RETURN clause.

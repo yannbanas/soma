@@ -108,7 +108,7 @@ pub fn run_benchmark_full(
             title_entities.insert(title.clone(), ent_names);
 
             ingested += 1;
-            if llm_client.is_some() && ingested % 20 == 0 {
+            if llm_client.is_some() && ingested.is_multiple_of(20) {
                 eprint!(
                     "\r  Ingesting with LLM: {}/{} paragraphs...",
                     ingested, total_paragraphs
@@ -156,16 +156,13 @@ pub fn run_benchmark_full(
             .collect();
         let mut emb_map = HashMap::new();
         let batch_size = 100;
-        let total_batches = (filtered.len() + batch_size - 1) / batch_size;
+        let total_batches = filtered.len().div_ceil(batch_size);
         for (batch_idx, chunk) in filtered.chunks(batch_size).enumerate() {
             let batch: Vec<String> = chunk.to_vec();
-            match ec.embed_batch(&batch) {
-                Ok(Some(vecs)) => {
-                    for (label, vec) in batch.iter().zip(vecs.into_iter()) {
-                        emb_map.insert(label.clone(), vec);
-                    }
+            if let Ok(Some(vecs)) = ec.embed_batch(&batch) {
+                for (label, vec) in batch.iter().zip(vecs.into_iter()) {
+                    emb_map.insert(label.clone(), vec);
                 }
-                _ => {}
             }
             if total_batches > 2 {
                 eprint!(
@@ -176,7 +173,11 @@ pub fn run_benchmark_full(
             }
         }
         if total_batches > 2 {
-            eprintln!("\r  Embedding labels: {}/{} done.", filtered.len(), filtered.len());
+            eprintln!(
+                "\r  Embedding labels: {}/{} done.",
+                filtered.len(),
+                filtered.len()
+            );
         }
         emb_map
     } else {

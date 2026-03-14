@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 use soma_graph::StigreGraph;
 use soma_ingest::{Chunker, IngestPipeline, PatternExtractor};
@@ -81,9 +81,16 @@ fn bench_full_pipeline(c: &mut Criterion) {
 
     group.bench_function("short_text", |b| {
         b.iter_batched(
-            || (IngestPipeline::default_config(), StigreGraph::new("bench", 0.05)),
+            || {
+                (
+                    IngestPipeline::default_config(),
+                    StigreGraph::new("bench", 0.05),
+                )
+            },
             |(pipeline, mut graph)| {
-                let result = pipeline.ingest_text(black_box(SHORT_TEXT), &mut graph, "bench").unwrap();
+                let result = pipeline
+                    .ingest_text(black_box(SHORT_TEXT), &mut graph, "bench")
+                    .unwrap();
                 black_box(result.triplets_extracted);
             },
             criterion::BatchSize::SmallInput,
@@ -92,9 +99,16 @@ fn bench_full_pipeline(c: &mut Criterion) {
 
     group.bench_function("medium_text", |b| {
         b.iter_batched(
-            || (IngestPipeline::default_config(), StigreGraph::new("bench", 0.05)),
+            || {
+                (
+                    IngestPipeline::default_config(),
+                    StigreGraph::new("bench", 0.05),
+                )
+            },
             |(pipeline, mut graph)| {
-                let result = pipeline.ingest_text(black_box(MEDIUM_TEXT), &mut graph, "bench").unwrap();
+                let result = pipeline
+                    .ingest_text(black_box(MEDIUM_TEXT), &mut graph, "bench")
+                    .unwrap();
                 black_box(result.triplets_extracted);
             },
             criterion::BatchSize::SmallInput,
@@ -104,9 +118,16 @@ fn bench_full_pipeline(c: &mut Criterion) {
     let large_text = MEDIUM_TEXT.repeat(20);
     group.bench_function("large_text_20x", |b| {
         b.iter_batched(
-            || (IngestPipeline::default_config(), StigreGraph::new("bench", 0.05)),
+            || {
+                (
+                    IngestPipeline::default_config(),
+                    StigreGraph::new("bench", 0.05),
+                )
+            },
             |(pipeline, mut graph)| {
-                let result = pipeline.ingest_text(black_box(&large_text), &mut graph, "bench").unwrap();
+                let result = pipeline
+                    .ingest_text(black_box(&large_text), &mut graph, "bench")
+                    .unwrap();
                 black_box(result.triplets_extracted);
             },
             criterion::BatchSize::SmallInput,

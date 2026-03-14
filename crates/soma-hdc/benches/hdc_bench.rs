@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 use soma_hdc::HdcEngine;
 
@@ -7,11 +7,26 @@ fn build_trained_engine(dim: usize, corpus_size: usize) -> HdcEngine {
     let mut engine = HdcEngine::new(dim, 5, true);
     let corpus: Vec<String> = (0..corpus_size)
         .map(|i| match i % 5 {
-            0 => format!("ChromoQ variant {} is a fluorescent protein derived from EGFP", i),
-            1 => format!("AlphaFold2 predicts the structure of protein {} with high accuracy", i),
-            2 => format!("Rust programming language ensures memory safety through ownership system {}", i),
-            3 => format!("WebAssembly enables high performance computation in the browser context {}", i),
-            _ => format!("Bioluminescence in organism {} involves luciferin and luciferase enzymes", i),
+            0 => format!(
+                "ChromoQ variant {} is a fluorescent protein derived from EGFP",
+                i
+            ),
+            1 => format!(
+                "AlphaFold2 predicts the structure of protein {} with high accuracy",
+                i
+            ),
+            2 => format!(
+                "Rust programming language ensures memory safety through ownership system {}",
+                i
+            ),
+            3 => format!(
+                "WebAssembly enables high performance computation in the browser context {}",
+                i
+            ),
+            _ => format!(
+                "Bioluminescence in organism {} involves luciferin and luciferase enzymes",
+                i
+            ),
         })
         .collect();
     engine.train(&corpus);
@@ -26,7 +41,13 @@ fn bench_train(c: &mut Criterion) {
             &corpus_size,
             |b, &size| {
                 let corpus: Vec<String> = (0..size)
-                    .map(|i| format!("Sentence {} about protein {} and fluorescence properties.", i, i * 7))
+                    .map(|i| {
+                        format!(
+                            "Sentence {} about protein {} and fluorescence properties.",
+                            i,
+                            i * 7
+                        )
+                    })
                     .collect();
                 b.iter(|| {
                     let mut engine = HdcEngine::new(10_000, 5, true);
@@ -81,7 +102,12 @@ fn bench_search(c: &mut Criterion) {
     let engine = build_trained_engine(10_000, 100);
 
     let candidates: Vec<String> = (0..100)
-        .map(|i| format!("candidate sentence {} about various topics including proteins", i))
+        .map(|i| {
+            format!(
+                "candidate sentence {} about various topics including proteins",
+                i
+            )
+        })
         .collect();
 
     for k in [5, 10, 50] {

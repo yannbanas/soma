@@ -93,11 +93,10 @@ impl OllamaClient {
 
         let url = format!("{}/api/generate", self.endpoint);
 
-        let response =
-            blocking_send(self.client.post(&url).json(&request)).map_err(|e| {
-                warn!("[llm] Ollama unreachable: {}", e);
-                LlmError::ConnectionFailed(e.to_string())
-            })?;
+        let response = blocking_send(self.client.post(&url).json(&request)).map_err(|e| {
+            warn!("[llm] Ollama unreachable: {}", e);
+            LlmError::ConnectionFailed(e.to_string())
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -135,11 +134,10 @@ impl OllamaClient {
 
         let url = format!("{}/api/embed", self.endpoint);
 
-        let response =
-            blocking_send(self.client.post(&url).json(&request)).map_err(|e| {
-                warn!("[llm] Ollama batch embed unreachable: {}", e);
-                LlmError::ConnectionFailed(e.to_string())
-            })?;
+        let response = blocking_send(self.client.post(&url).json(&request)).map_err(|e| {
+            warn!("[llm] Ollama batch embed unreachable: {}", e);
+            LlmError::ConnectionFailed(e.to_string())
+        })?;
 
         if !response.status().is_success() {
             return Ok(None);
@@ -166,11 +164,10 @@ impl OllamaClient {
 
         let url = format!("{}/api/embeddings", self.endpoint);
 
-        let response =
-            blocking_send(self.client.post(&url).json(&request)).map_err(|e| {
-                warn!("[llm] Ollama embed unreachable: {}", e);
-                LlmError::ConnectionFailed(e.to_string())
-            })?;
+        let response = blocking_send(self.client.post(&url).json(&request)).map_err(|e| {
+            warn!("[llm] Ollama embed unreachable: {}", e);
+            LlmError::ConnectionFailed(e.to_string())
+        })?;
 
         if !response.status().is_success() {
             return Ok(None); // graceful degradation
@@ -253,9 +250,7 @@ pub(crate) fn parse_triplets_response(response: &str) -> Result<Vec<LlmTriplet>,
     // Last resort: find first JSON array or object in the text
     if let Some(start) = cleaned.find('[') {
         if let Some(end) = cleaned.rfind(']') {
-            if let Ok(triplets) =
-                serde_json::from_str::<Vec<LlmTriplet>>(&cleaned[start..=end])
-            {
+            if let Ok(triplets) = serde_json::from_str::<Vec<LlmTriplet>>(&cleaned[start..=end]) {
                 return Ok(triplets);
             }
         }

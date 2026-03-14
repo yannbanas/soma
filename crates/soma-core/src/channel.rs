@@ -31,14 +31,14 @@ impl Channel {
     #[inline]
     pub fn tau_decay(self) -> f32 {
         match self {
-            Channel::DerivesDe   => 0.0,     // permanent — filiation never fades
-            Channel::Causal      => 0.0001,  // quasi-permanent
-            Channel::Trail       => 0.001,   // very slow (~40 days)
-            Channel::Alarm       => 0.005,   // slow (~8 days — errors persist)
-            Channel::SemanticSim => 0.02,    // moderate (~2 days)
-            Channel::Episodic    => 0.05,    // fast (~20h)
-            Channel::Reasoning   => 0.08,    // very fast (~12h)
-            Channel::Custom(_)   => 0.01,
+            Channel::DerivesDe => 0.0,    // permanent — filiation never fades
+            Channel::Causal => 0.0001,    // quasi-permanent
+            Channel::Trail => 0.001,      // very slow (~40 days)
+            Channel::Alarm => 0.005,      // slow (~8 days — errors persist)
+            Channel::SemanticSim => 0.02, // moderate (~2 days)
+            Channel::Episodic => 0.05,    // fast (~20h)
+            Channel::Reasoning => 0.08,   // very fast (~12h)
+            Channel::Custom(_) => 0.01,
         }
     }
 
@@ -46,14 +46,14 @@ impl Channel {
     #[inline]
     pub fn reinforce_delta(self) -> f32 {
         match self {
-            Channel::Causal      => 0.50,
-            Channel::DerivesDe   => 0.40,
-            Channel::Alarm       => 0.35,  // errors strengthen if repeated
-            Channel::Trail       => 0.30,
+            Channel::Causal => 0.50,
+            Channel::DerivesDe => 0.40,
+            Channel::Alarm => 0.35, // errors strengthen if repeated
+            Channel::Trail => 0.30,
             Channel::SemanticSim => 0.20,
-            Channel::Reasoning   => 0.15,
-            Channel::Episodic    => 0.10,
-            Channel::Custom(_)   => 0.20,
+            Channel::Reasoning => 0.15,
+            Channel::Episodic => 0.10,
+            Channel::Custom(_) => 0.20,
         }
     }
 
@@ -66,13 +66,13 @@ impl Channel {
     /// Parse channel name from string (case-insensitive).
     pub fn from_str_name(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
-            "trail"        => Some(Channel::Trail),
-            "causal"       => Some(Channel::Causal),
+            "trail" => Some(Channel::Trail),
+            "causal" => Some(Channel::Causal),
             "derives_de" | "derivesde" => Some(Channel::DerivesDe),
-            "episodic"     => Some(Channel::Episodic),
-            "alarm"        => Some(Channel::Alarm),
+            "episodic" => Some(Channel::Episodic),
+            "alarm" => Some(Channel::Alarm),
             "semantic_sim" | "semanticsim" => Some(Channel::SemanticSim),
-            "reasoning"    => Some(Channel::Reasoning),
+            "reasoning" => Some(Channel::Reasoning),
             _ => {
                 // Try parsing "custom:NNN"
                 if let Some(n) = s.strip_prefix("custom:") {
@@ -87,14 +87,14 @@ impl Channel {
     /// String representation for display/serialization.
     pub fn as_str(&self) -> &'static str {
         match self {
-            Channel::Trail       => "trail",
-            Channel::Causal      => "causal",
-            Channel::DerivesDe   => "derives_de",
-            Channel::Episodic    => "episodic",
-            Channel::Alarm       => "alarm",
+            Channel::Trail => "trail",
+            Channel::Causal => "causal",
+            Channel::DerivesDe => "derives_de",
+            Channel::Episodic => "episodic",
+            Channel::Alarm => "alarm",
             Channel::SemanticSim => "semantic_sim",
-            Channel::Reasoning   => "reasoning",
-            Channel::Custom(_)   => "custom",
+            Channel::Reasoning => "reasoning",
+            Channel::Custom(_) => "custom",
         }
     }
 }
@@ -133,8 +133,14 @@ mod tests {
     fn parse_channel_names() {
         assert_eq!(Channel::from_str_name("trail"), Some(Channel::Trail));
         assert_eq!(Channel::from_str_name("CAUSAL"), Some(Channel::Causal));
-        assert_eq!(Channel::from_str_name("derives_de"), Some(Channel::DerivesDe));
-        assert_eq!(Channel::from_str_name("custom:42"), Some(Channel::Custom(42)));
+        assert_eq!(
+            Channel::from_str_name("derives_de"),
+            Some(Channel::DerivesDe)
+        );
+        assert_eq!(
+            Channel::from_str_name("custom:42"),
+            Some(Channel::Custom(42))
+        );
         assert_eq!(Channel::from_str_name("unknown"), None);
     }
 

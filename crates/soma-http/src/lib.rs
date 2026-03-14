@@ -12,7 +12,7 @@ use std::time::Instant;
 
 use axum::Router;
 use tokio::net::TcpListener;
-use tokio::sync::{RwLock, broadcast};
+use tokio::sync::{broadcast, RwLock};
 use tracing::info;
 
 use soma_graph::StigreGraph;
@@ -22,7 +22,7 @@ use soma_store::Store;
 /// A graph event emitted on mutations (for webhooks + SSE).
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct GraphEvent {
-    pub kind: String,       // "node_added", "edge_added", "node_removed", etc.
+    pub kind: String, // "node_added", "edge_added", "node_removed", etc.
     pub label: String,
     pub detail: serde_json::Value,
     pub timestamp: String,
@@ -94,10 +94,7 @@ impl HttpServer {
     /// Run the HTTP server on the given port. Blocks until shutdown.
     pub async fn run(&self, port: u16) -> std::io::Result<()> {
         // Spawn webhook dispatcher
-        webhooks::spawn_dispatcher(
-            self.state.event_tx.subscribe(),
-            self.state.webhooks.clone(),
-        );
+        webhooks::spawn_dispatcher(self.state.event_tx.subscribe(), self.state.webhooks.clone());
 
         let app = self.router();
         let addr = format!("0.0.0.0:{}", port);

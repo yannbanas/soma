@@ -1,13 +1,11 @@
-use std::collections::{BinaryHeap, HashMap};
 use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap};
 
 use chrono::{DateTime, Utc};
 use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 
-use soma_core::{
-    Channel, EdgeId, NodeId, NodeKind, QueryResult, SomaNode, SomaQuery, StigreEdge,
-};
+use soma_core::{Channel, EdgeId, NodeId, NodeKind, QueryResult, SomaNode, SomaQuery, StigreEdge};
 
 use crate::csr::AdjacencyCache;
 use crate::stats::GraphStats;
@@ -34,7 +32,9 @@ impl PartialOrd for TraversalEntry {
 }
 impl Ord for TraversalEntry {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.score.partial_cmp(&other.score).unwrap_or(Ordering::Equal)
+        self.score
+            .partial_cmp(&other.score)
+            .unwrap_or(Ordering::Equal)
     }
 }
 
@@ -217,9 +217,7 @@ impl StigreGraph {
 
     /// Get mutable reference to an edge by EdgeId.
     pub fn get_edge_mut(&mut self, id: EdgeId) -> Option<&mut StigreEdge> {
-        self.inner
-            .edge_weights_mut()
-            .find(|e| e.id == id)
+        self.inner.edge_weights_mut().find(|e| e.id == id)
     }
 
     /// Get outgoing edges from a node.
@@ -227,10 +225,7 @@ impl StigreGraph {
         let Some(&idx) = self.id_idx.get(&node_id) else {
             return Vec::new();
         };
-        self.inner
-            .edges(idx)
-            .map(|e| e.weight())
-            .collect()
+        self.inner.edges(idx).map(|e| e.weight()).collect()
     }
 
     /// Get incoming edges to a node.
@@ -293,9 +288,7 @@ impl StigreGraph {
         visited.insert(start_idx, 1.0_f32);
 
         // Seed with filtered outgoing edges
-        self.push_neighbors_to_heap(
-            &mut heap, start_idx, &[], 1.0, 1, query, now,
-        );
+        self.push_neighbors_to_heap(&mut heap, start_idx, &[], 1.0, 1, query, now);
 
         while let Some(entry) = heap.pop() {
             if entry.hops > query.max_hops {
@@ -311,7 +304,12 @@ impl StigreGraph {
             visited.insert(entry.node_idx, entry.score);
 
             let node = self.inner[entry.node_idx].clone();
-            results.push(QueryResult::new(node, entry.path.clone(), entry.score, entry.hops));
+            results.push(QueryResult::new(
+                node,
+                entry.path.clone(),
+                entry.score,
+                entry.hops,
+            ));
 
             // Early termination: stop exploring if we have 2x the limit
             if results.len() >= query.limit * 2 {
@@ -321,8 +319,13 @@ impl StigreGraph {
             // Expand neighbors
             if entry.hops < query.max_hops {
                 self.push_neighbors_to_heap(
-                    &mut heap, entry.node_idx, &entry.path,
-                    entry.score, entry.hops + 1, query, now,
+                    &mut heap,
+                    entry.node_idx,
+                    &entry.path,
+                    entry.score,
+                    entry.hops + 1,
+                    query,
+                    now,
                 );
             }
         }
@@ -353,7 +356,11 @@ impl StigreGraph {
 
         // Seed from cache
         for cached in self.adj_cache.outgoing_filtered(
-            start_idx, &query.channels, query.min_intensity, query.since, query.until,
+            start_idx,
+            &query.channels,
+            query.min_intensity,
+            query.since,
+            query.until,
         ) {
             heap.push(TraversalEntry {
                 node_idx: cached.target,
@@ -364,25 +371,44 @@ impl StigreGraph {
         }
 
         while let Some(entry) = heap.pop() {
-            if entry.hops > query.max_hops { continue; }
+            if entry.hops > query.max_hops {
+                continue;
+            }
             if let Some(&prev) = visited.get(&entry.node_idx) {
-                if prev >= entry.score { continue; }
+                if prev >= entry.score {
+                    continue;
+                }
             }
             visited.insert(entry.node_idx, entry.score);
 
             let node = self.inner[entry.node_idx].clone();
-            results.push(QueryResult::new(node, entry.path.clone(), entry.score, entry.hops));
+            results.push(QueryResult::new(
+                node,
+                entry.path.clone(),
+                entry.score,
+                entry.hops,
+            ));
 
-            if results.len() >= query.limit * 2 { break; }
+            if results.len() >= query.limit * 2 {
+                break;
+            }
 
             if entry.hops < query.max_hops {
                 for cached in self.adj_cache.outgoing_filtered(
-                    entry.node_idx, &query.channels, query.min_intensity, query.since, query.until,
+                    entry.node_idx,
+                    &query.channels,
+                    query.min_intensity,
+                    query.since,
+                    query.until,
                 ) {
                     let new_score = entry.score * cached.intensity;
-                    if new_score < query.min_intensity { continue; }
+                    if new_score < query.min_intensity {
+                        continue;
+                    }
                     if let Some(&prev) = visited.get(&cached.target) {
-                        if prev >= new_score { continue; }
+                        if prev >= new_score {
+                            continue;
+                        }
                     }
                     let mut new_path = entry.path.clone();
                     new_path.push(self.reconstruct_edge_stub(entry.node_idx, cached));
@@ -410,14 +436,16 @@ impl StigreGraph {
         // 2. Case-insensitive exact match
         let query_lower = start.to_lowercase();
         if let Some((_, &idx)) = self
-            .label_idx.iter()
+            .label_idx
+            .iter()
             .find(|(k, _)| k.to_lowercase() == query_lower)
         {
             return Some(idx);
         }
         // 3. Label contains query (prefer shortest label)
         if let Some((_, &idx)) = self
-            .label_idx.iter()
+            .label_idx
+            .iter()
             .filter(|(k, _)| k.to_lowercase().contains(&query_lower))
             .min_by_key(|(k, _)| k.len())
         {
@@ -425,7 +453,8 @@ impl StigreGraph {
         }
         // 4. Query contains label (prefer longest label, min 3 chars)
         if let Some((_, &idx)) = self
-            .label_idx.iter()
+            .label_idx
+            .iter()
             .filter(|(k, _)| k.len() >= 3 && query_lower.contains(&k.to_lowercase()))
             .max_by_key(|(k, _)| k.len())
         {
@@ -435,6 +464,7 @@ impl StigreGraph {
     }
 
     /// Push filtered neighbors into the BFS heap (predicate pushdown).
+    #[allow(clippy::too_many_arguments)]
     fn push_neighbors_to_heap(
         &self,
         heap: &mut BinaryHeap<TraversalEntry>,
@@ -448,14 +478,28 @@ impl StigreGraph {
         for edge_ref in self.inner.edges(node_idx) {
             let w = edge_ref.weight();
             // Predicate pushdown: all filters applied here
-            if !query.allows_channel(&w.channel) { continue; }
+            if !query.allows_channel(&w.channel) {
+                continue;
+            }
             let eff = w.effective_intensity(now);
-            if eff < query.min_intensity { continue; }
-            if let Some(since) = query.since { if w.last_touch < since { continue; } }
-            if let Some(until) = query.until { if w.last_touch > until { continue; } }
+            if eff < query.min_intensity {
+                continue;
+            }
+            if let Some(since) = query.since {
+                if w.last_touch < since {
+                    continue;
+                }
+            }
+            if let Some(until) = query.until {
+                if w.last_touch > until {
+                    continue;
+                }
+            }
 
             let new_score = current_score * eff;
-            if new_score < query.min_intensity { continue; }
+            if new_score < query.min_intensity {
+                continue;
+            }
 
             let mut new_path = current_path.to_vec();
             new_path.push(w.clone());
@@ -469,7 +513,11 @@ impl StigreGraph {
     }
 
     /// Reconstruct a minimal StigreEdge from cached edge data (for path recording).
-    fn reconstruct_edge_stub(&self, from_idx: NodeIndex, cached: &crate::csr::CachedEdge) -> StigreEdge {
+    fn reconstruct_edge_stub(
+        &self,
+        from_idx: NodeIndex,
+        cached: &crate::csr::CachedEdge,
+    ) -> StigreEdge {
         let from_node = &self.inner[from_idx];
         let to_node = &self.inner[cached.target];
         let mut edge = StigreEdge::new(
@@ -499,7 +547,11 @@ impl StigreGraph {
     }
 
     /// Set provenance on an edge.
-    pub fn set_edge_provenance(&mut self, edge_id: EdgeId, provenance: soma_core::Provenance) -> bool {
+    pub fn set_edge_provenance(
+        &mut self,
+        edge_id: EdgeId,
+        provenance: soma_core::Provenance,
+    ) -> bool {
         if let Some(edge) = self.get_edge_mut(edge_id) {
             edge.provenance = provenance;
             true
@@ -509,10 +561,21 @@ impl StigreGraph {
     }
 
     /// Find edges between two labels (any channel). Returns (EdgeId, channel, confidence).
-    pub fn find_edges_by_labels(&self, from_label: &str, to_label: &str) -> Vec<(EdgeId, Channel, f32)> {
-        let from_idx = match self.label_idx.get(from_label) { Some(&i) => i, None => return vec![] };
-        let to_idx = match self.label_idx.get(to_label) { Some(&i) => i, None => return vec![] };
-        self.inner.edges_connecting(from_idx, to_idx)
+    pub fn find_edges_by_labels(
+        &self,
+        from_label: &str,
+        to_label: &str,
+    ) -> Vec<(EdgeId, Channel, f32)> {
+        let from_idx = match self.label_idx.get(from_label) {
+            Some(&i) => i,
+            None => return vec![],
+        };
+        let to_idx = match self.label_idx.get(to_label) {
+            Some(&i) => i,
+            None => return vec![],
+        };
+        self.inner
+            .edges_connecting(from_idx, to_idx)
             .map(|e| (e.weight().id, e.weight().channel, e.weight().confidence))
             .collect()
     }
@@ -522,15 +585,21 @@ impl StigreGraph {
     pub fn merge_nodes(&mut self, keep_label: &str, absorb_label: &str) -> Option<usize> {
         let keep_idx = self.label_idx.get(keep_label).copied()?;
         let absorb_idx = self.label_idx.get(absorb_label).copied()?;
-        if keep_idx == absorb_idx { return Some(0); }
+        if keep_idx == absorb_idx {
+            return Some(0);
+        }
 
         let keep_id = self.inner[keep_idx].id;
 
         // Collect edges to transfer (can't mutate while iterating)
-        let outgoing: Vec<_> = self.inner.edges(absorb_idx)
+        let outgoing: Vec<_> = self
+            .inner
+            .edges(absorb_idx)
             .map(|e| (e.target(), e.weight().clone()))
             .collect();
-        let incoming: Vec<_> = self.inner.edges_directed(absorb_idx, petgraph::Direction::Incoming)
+        let incoming: Vec<_> = self
+            .inner
+            .edges_directed(absorb_idx, petgraph::Direction::Incoming)
             .map(|e| (e.source(), e.weight().clone()))
             .collect();
 
@@ -538,7 +607,9 @@ impl StigreGraph {
 
         // Transfer outgoing edges
         for (target, mut edge) in outgoing {
-            if target == keep_idx { continue; } // skip self-loops
+            if target == keep_idx {
+                continue;
+            } // skip self-loops
             edge.from = keep_id;
             self.inner.add_edge(keep_idx, target, edge);
             transferred += 1;
@@ -546,7 +617,9 @@ impl StigreGraph {
 
         // Transfer incoming edges
         for (source, mut edge) in incoming {
-            if source == keep_idx { continue; }
+            if source == keep_idx {
+                continue;
+            }
             edge.to = keep_id;
             self.inner.add_edge(source, keep_idx, edge);
             transferred += 1;
@@ -1039,10 +1112,7 @@ mod tests {
         g.upsert_edge(a, c, Channel::Trail, 0.9, "test");
         g.upsert_edge(b, c, Channel::Trail, 0.9, "test");
 
-        let results = g.ppr(
-            &["A".to_string(), "B".to_string()],
-            0.15, 50, 1e-6, None,
-        );
+        let results = g.ppr(&["A".to_string(), "B".to_string()], 0.15, 50, 1e-6, None);
         // C should be found (reachable from both seeds)
         assert!(results.iter().any(|r| r.1 == "C"));
     }
@@ -1083,8 +1153,18 @@ mod tests {
         let iso_spec = spec[&isolated];
 
         // Isolated (degree 0) > leaf (degree 1) > hub (degree 3)
-        assert!(iso_spec > hub_spec, "isolated={} should > hub={}", iso_spec, hub_spec);
-        assert!(leaf_spec > hub_spec, "leaf={} should > hub={}", leaf_spec, hub_spec);
+        assert!(
+            iso_spec > hub_spec,
+            "isolated={} should > hub={}",
+            iso_spec,
+            hub_spec
+        );
+        assert!(
+            leaf_spec > hub_spec,
+            "leaf={} should > hub={}",
+            leaf_spec,
+            hub_spec
+        );
     }
 
     #[test]

@@ -75,7 +75,10 @@ impl PluginRegistry {
 
     /// Find a plugin by name.
     pub fn find_by_name(&self, name: &str) -> Option<&dyn IngestPlugin> {
-        self.plugins.iter().find(|p| p.name() == name).map(|p| p.as_ref())
+        self.plugins
+            .iter()
+            .find(|p| p.name() == name)
+            .map(|p| p.as_ref())
     }
 
     /// List all registered plugins.
@@ -89,10 +92,7 @@ impl PluginRegistry {
         path: &std::path::Path,
         graph: &mut StigreGraph,
     ) -> Result<Option<PluginResult>, SomaError> {
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("");
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
         if let Some(plugin) = self.find_by_extension(ext) {
             let content = std::fs::read_to_string(path)
@@ -118,8 +118,12 @@ mod tests {
     struct DummyPlugin;
 
     impl IngestPlugin for DummyPlugin {
-        fn name(&self) -> &str { "dummy" }
-        fn extensions(&self) -> &[&str] { &["dum", "dummy"] }
+        fn name(&self) -> &str {
+            "dummy"
+        }
+        fn extensions(&self) -> &[&str] {
+            &["dum", "dummy"]
+        }
         fn ingest(
             &self,
             _content: &str,

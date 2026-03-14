@@ -454,12 +454,21 @@ impl Parser {
 
         let property = self.parse_property_access()?;
         let descending = match self.peek() {
-            Token::Desc => { self.advance(); true }
-            Token::Asc => { self.advance(); false }
+            Token::Desc => {
+                self.advance();
+                true
+            }
+            Token::Asc => {
+                self.advance();
+                false
+            }
             _ => false,
         };
 
-        Ok(Some(OrderBy { property, descending }))
+        Ok(Some(OrderBy {
+            property,
+            descending,
+        }))
     }
 
     fn parse_optional_limit(&mut self) -> Result<Option<usize>, String> {
@@ -470,13 +479,19 @@ impl Parser {
 
         match self.advance() {
             Token::IntLit(n) if n > 0 => Ok(Some(n as usize)),
-            other => Err(format!("Expected positive integer after LIMIT, got {:?}", other)),
+            other => Err(format!(
+                "Expected positive integer after LIMIT, got {:?}",
+                other
+            )),
         }
     }
 
     // --- CREATE ---
 
-    fn parse_create_rel(&mut self, match_clause: Option<MatchClause>) -> Result<CypherStatement, String> {
+    fn parse_create_rel(
+        &mut self,
+        match_clause: Option<MatchClause>,
+    ) -> Result<CypherStatement, String> {
         // (from_var)-[:RelType {props}]->(to_var)
         self.expect(&Token::LParen)?;
         let from_var = self.expect_ident()?;
@@ -544,8 +559,8 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::lexer::Lexer;
     use super::*;
+    use crate::lexer::Lexer;
 
     fn parse(input: &str) -> Result<CypherStatement, String> {
         let mut lexer = Lexer::new(input);
@@ -582,9 +597,7 @@ mod tests {
 
     #[test]
     fn parse_relationship_pattern() {
-        let stmt = parse(
-            "MATCH (a:Entity)-[:Trail*1..3]->(b:Concept) RETURN b.label"
-        ).unwrap();
+        let stmt = parse("MATCH (a:Entity)-[:Trail*1..3]->(b:Concept) RETURN b.label").unwrap();
         if let CypherStatement::Query(q) = stmt {
             let pat = &q.match_clause.patterns[0];
             assert_eq!(pat.elements.len(), 3); // node, rel, node
@@ -601,9 +614,9 @@ mod tests {
 
     #[test]
     fn parse_where_and() {
-        let stmt = parse(
-            r#"MATCH (n) WHERE n.intensity > 0.5 AND n.label CONTAINS "Rust" RETURN n"#
-        ).unwrap();
+        let stmt =
+            parse(r#"MATCH (n) WHERE n.intensity > 0.5 AND n.label CONTAINS "Rust" RETURN n"#)
+                .unwrap();
         if let CypherStatement::Query(q) = stmt {
             assert!(q.where_clause.is_some());
             if let Some(WhereExpr::And(_, _)) = q.where_clause {
@@ -616,12 +629,10 @@ mod tests {
 
     #[test]
     fn parse_order_by_limit() {
-        let stmt = parse(
-            "MATCH (n:Entity) RETURN n.label ORDER BY n.label DESC LIMIT 10"
-        ).unwrap();
+        let stmt = parse("MATCH (n:Entity) RETURN n.label ORDER BY n.label DESC LIMIT 10").unwrap();
         if let CypherStatement::Query(q) = stmt {
             assert!(q.order_by.is_some());
-            assert_eq!(q.order_by.as_ref().unwrap().descending, true);
+            assert!(q.order_by.as_ref().unwrap().descending);
             assert_eq!(q.limit, Some(10));
         }
     }
@@ -643,9 +654,7 @@ mod tests {
 
     #[test]
     fn parse_delete() {
-        let stmt = parse(
-            r#"MATCH (n {label: "old"}) DELETE n"#
-        ).unwrap();
+        let stmt = parse(r#"MATCH (n {label: "old"}) DELETE n"#).unwrap();
         if let CypherStatement::Delete(d) = stmt {
             assert_eq!(d.variables, vec!["n"]);
         } else {

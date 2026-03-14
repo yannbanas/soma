@@ -35,10 +35,10 @@ pub struct BioConfig {
 impl Default for BioConfig {
     fn default() -> Self {
         BioConfig {
-            evaporation_interval: Duration::from_secs(3600),      // 1h
-            physarum_interval: Duration::from_secs(7200),         // 2h
-            consolidation_interval: Duration::from_secs(21600),   // 6h
-            pruning_interval: Duration::from_secs(86400),         // 24h
+            evaporation_interval: Duration::from_secs(3600), // 1h
+            physarum_interval: Duration::from_secs(7200),    // 2h
+            consolidation_interval: Duration::from_secs(21600), // 6h
+            pruning_interval: Duration::from_secs(86400),    // 24h
             prune_threshold: 0.05,
         }
     }
@@ -48,15 +48,11 @@ impl BioConfig {
     pub fn from_soma_config(cfg: &soma_core::SomaConfig) -> Self {
         BioConfig {
             evaporation_interval: Duration::from_secs_f64(3600.0), // always 1h
-            physarum_interval: Duration::from_secs_f64(
-                cfg.bio.physarum_interval_hours * 3600.0,
-            ),
+            physarum_interval: Duration::from_secs_f64(cfg.bio.physarum_interval_hours * 3600.0),
             consolidation_interval: Duration::from_secs_f64(
                 cfg.bio.consolidation_interval_hours * 3600.0,
             ),
-            pruning_interval: Duration::from_secs_f64(
-                cfg.bio.pruning_interval_hours * 3600.0,
-            ),
+            pruning_interval: Duration::from_secs_f64(cfg.bio.pruning_interval_hours * 3600.0),
             prune_threshold: cfg.bio.prune_threshold,
         }
     }
@@ -73,11 +69,7 @@ impl BioScheduler {
     }
 
     /// Run all 4 biological loops concurrently. Returns on Ctrl+C for graceful shutdown.
-    pub async fn run(
-        &self,
-        graph: Arc<RwLock<StigreGraph>>,
-        store: Arc<RwLock<Store>>,
-    ) {
+    pub async fn run(&self, graph: Arc<RwLock<StigreGraph>>, store: Arc<RwLock<Store>>) {
         tokio::select! {
             _ = self.run_loops(graph.clone(), store.clone()) => {},
             _ = tokio::signal::ctrl_c() => {
@@ -88,11 +80,7 @@ impl BioScheduler {
 
     /// Run all 4 biological loops without handling Ctrl+C.
     /// Use this when the caller manages shutdown (e.g., daemon with HTTP server).
-    pub async fn run_loops(
-        &self,
-        graph: Arc<RwLock<StigreGraph>>,
-        store: Arc<RwLock<Store>>,
-    ) {
+    pub async fn run_loops(&self, graph: Arc<RwLock<StigreGraph>>, store: Arc<RwLock<Store>>) {
         let config = self.config.clone();
         tokio::join!(
             Self::evaporation_watchdog(graph.clone(), config.clone()),
@@ -221,9 +209,8 @@ impl BioScheduler {
             }
 
             // Average uses across all edges
-            let avg_uses: f32 =
-                edge_info.iter().map(|(_, u, _, _)| *u as f32).sum::<f32>()
-                    / edge_info.len() as f32;
+            let avg_uses: f32 = edge_info.iter().map(|(_, u, _, _)| *u as f32).sum::<f32>()
+                / edge_info.len() as f32;
 
             let mut reinforced = 0u32;
             for (id, uses, _intensity, _channel) in &edge_info {
@@ -236,7 +223,10 @@ impl BioScheduler {
             }
 
             if reinforced > 0 {
-                info!("[bio:physarum] reinforced {} high-traffic edges", reinforced);
+                info!(
+                    "[bio:physarum] reinforced {} high-traffic edges",
+                    reinforced
+                );
             }
         }
     }
@@ -259,9 +249,7 @@ impl BioScheduler {
             // Find recent Episodic nodes
             let recent_episodes: Vec<(soma_core::NodeId, String)> = g
                 .all_nodes()
-                .filter(|n| {
-                    n.kind == NodeKind::Event && n.created_at >= six_hours_ago
-                })
+                .filter(|n| n.kind == NodeKind::Event && n.created_at >= six_hours_ago)
                 .map(|n| (n.id, n.label.clone()))
                 .collect();
 
@@ -299,9 +287,8 @@ impl BioScheduler {
             {
                 let mut s = store.write().await;
                 // Concept node
-                let concept_node = soma_core::SomaNode::new(
-                    g.workspace(), &concept_label, NodeKind::Concept,
-                );
+                let concept_node =
+                    soma_core::SomaNode::new(g.workspace(), &concept_label, NodeKind::Concept);
                 let _ = s.write_wal(&soma_store::WalEntry::NodeUpsert(concept_node));
                 // Individual edges
                 for edge in &created_edges {

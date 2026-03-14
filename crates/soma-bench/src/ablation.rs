@@ -3,8 +3,8 @@
 use crate::loader::BenchQuestion;
 use crate::metrics;
 use serde::Serialize;
-use soma_core::{fuzzy_label_search, rrf_merge_with_sources};
 use soma_core::SomaQuery;
+use soma_core::{fuzzy_label_search, rrf_merge_with_sources};
 use soma_graph::StigreGraph;
 use soma_hdc::HdcEngine;
 use std::collections::HashMap;
@@ -23,14 +23,62 @@ impl AblationConfig {
     /// All 8 standard ablation configurations.
     pub fn all_configs() -> Vec<Self> {
         vec![
-            Self { name: "graph_only".into(), use_graph_bfs: true, use_hdc: false, use_fuzzy: false, use_ppr: false },
-            Self { name: "hdc_only".into(), use_graph_bfs: false, use_hdc: true, use_fuzzy: false, use_ppr: false },
-            Self { name: "fuzzy_only".into(), use_graph_bfs: false, use_hdc: false, use_fuzzy: true, use_ppr: false },
-            Self { name: "ppr_only".into(), use_graph_bfs: false, use_hdc: false, use_fuzzy: false, use_ppr: true },
-            Self { name: "graph+hdc".into(), use_graph_bfs: true, use_hdc: true, use_fuzzy: false, use_ppr: false },
-            Self { name: "graph+hdc+fuzzy".into(), use_graph_bfs: true, use_hdc: true, use_fuzzy: true, use_ppr: false },
-            Self { name: "graph+ppr".into(), use_graph_bfs: true, use_hdc: false, use_fuzzy: false, use_ppr: true },
-            Self { name: "all_four".into(), use_graph_bfs: true, use_hdc: true, use_fuzzy: true, use_ppr: true },
+            Self {
+                name: "graph_only".into(),
+                use_graph_bfs: true,
+                use_hdc: false,
+                use_fuzzy: false,
+                use_ppr: false,
+            },
+            Self {
+                name: "hdc_only".into(),
+                use_graph_bfs: false,
+                use_hdc: true,
+                use_fuzzy: false,
+                use_ppr: false,
+            },
+            Self {
+                name: "fuzzy_only".into(),
+                use_graph_bfs: false,
+                use_hdc: false,
+                use_fuzzy: true,
+                use_ppr: false,
+            },
+            Self {
+                name: "ppr_only".into(),
+                use_graph_bfs: false,
+                use_hdc: false,
+                use_fuzzy: false,
+                use_ppr: true,
+            },
+            Self {
+                name: "graph+hdc".into(),
+                use_graph_bfs: true,
+                use_hdc: true,
+                use_fuzzy: false,
+                use_ppr: false,
+            },
+            Self {
+                name: "graph+hdc+fuzzy".into(),
+                use_graph_bfs: true,
+                use_hdc: true,
+                use_fuzzy: true,
+                use_ppr: false,
+            },
+            Self {
+                name: "graph+ppr".into(),
+                use_graph_bfs: true,
+                use_hdc: false,
+                use_fuzzy: false,
+                use_ppr: true,
+            },
+            Self {
+                name: "all_four".into(),
+                use_graph_bfs: true,
+                use_hdc: true,
+                use_fuzzy: true,
+                use_ppr: true,
+            },
         ]
     }
 }
@@ -75,7 +123,9 @@ pub fn search_with_ablation(
         // Also try fuzzy-matched labels as BFS seeds
         for (seed_label, seed_score) in fuzzy_label_search(query, &all_labels, 3) {
             if seed_score >= 0.5 {
-                let q = SomaQuery::new(&seed_label).with_max_hops(4).with_limit(limit);
+                let q = SomaQuery::new(&seed_label)
+                    .with_max_hops(4)
+                    .with_limit(limit);
                 let results = graph.traverse(&q);
                 for r in &results {
                     if !graph_list.iter().any(|(l, _)| l == &r.node.label) {

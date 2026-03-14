@@ -186,7 +186,8 @@ pub fn soma_tools() -> Vec<McpTool> {
         },
         McpTool {
             name: "soma_context".into(),
-            description: "Return formatted LLM-ready context block for a query, with token budget".into(),
+            description: "Return formatted LLM-ready context block for a query, with token budget"
+                .into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -210,7 +211,8 @@ pub fn soma_tools() -> Vec<McpTool> {
         },
         McpTool {
             name: "soma_correct".into(),
-            description: "Correct an edge's confidence when AI detects an error (feedback loop)".into(),
+            description: "Correct an edge's confidence when AI detects an error (feedback loop)"
+                .into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -237,7 +239,8 @@ pub fn soma_tools() -> Vec<McpTool> {
         },
         McpTool {
             name: "soma_compact".into(),
-            description: "Save a session summary before context compaction to preserve memory".into(),
+            description: "Save a session summary before context compaction to preserve memory"
+                .into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -251,7 +254,9 @@ pub fn soma_tools() -> Vec<McpTool> {
         },
         McpTool {
             name: "soma_session_restore".into(),
-            description: "Restore context from previous sessions via semantic search on session summaries".into(),
+            description:
+                "Restore context from previous sessions via semantic search on session summaries"
+                    .into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -263,7 +268,8 @@ pub fn soma_tools() -> Vec<McpTool> {
         },
         McpTool {
             name: "soma_explain".into(),
-            description: "Find and explain paths between two entities in the knowledge graph".into(),
+            description: "Find and explain paths between two entities in the knowledge graph"
+                .into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -276,7 +282,8 @@ pub fn soma_tools() -> Vec<McpTool> {
         },
         McpTool {
             name: "soma_merge".into(),
-            description: "Merge duplicate nodes, transferring all edges from absorbed to kept node".into(),
+            description: "Merge duplicate nodes, transferring all edges from absorbed to kept node"
+                .into(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {

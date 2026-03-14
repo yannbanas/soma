@@ -106,7 +106,13 @@ pub struct QueryResult {
 
 impl QueryResult {
     pub fn new(node: SomaNode, path: Vec<StigreEdge>, score: f32, hops: u8) -> Self {
-        QueryResult { node, path, score, hops, sources: Vec::new() }
+        QueryResult {
+            node,
+            path,
+            score,
+            hops,
+            sources: Vec::new(),
+        }
     }
 
     pub fn with_sources(mut self, sources: Vec<String>) -> Self {
@@ -139,8 +145,7 @@ mod tests {
 
     #[test]
     fn channel_filter_explicit() {
-        let q = SomaQuery::new("test")
-            .with_channels(vec![Channel::Trail, Channel::Alarm]);
+        let q = SomaQuery::new("test").with_channels(vec![Channel::Trail, Channel::Alarm]);
         assert!(q.allows_channel(&Channel::Trail));
         assert!(q.allows_channel(&Channel::Alarm));
         assert!(!q.allows_channel(&Channel::Episodic));

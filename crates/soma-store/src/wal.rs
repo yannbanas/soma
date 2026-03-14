@@ -46,10 +46,7 @@ impl WalWriter {
             }
         }
 
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)?;
+        let file = OpenOptions::new().create(true).append(true).open(path)?;
 
         // Count existing entries for stats
         let entry_count = Self::count_entries(path)?;
@@ -63,8 +60,8 @@ impl WalWriter {
 
     /// Append an entry to the WAL. Fsyncs for durability.
     pub fn append(&mut self, entry: &WalEntry) -> Result<(), SomaError> {
-        let data = serde_json::to_vec(entry)
-            .map_err(|e| SomaError::Serialization(e.to_string()))?;
+        let data =
+            serde_json::to_vec(entry).map_err(|e| SomaError::Serialization(e.to_string()))?;
 
         // Security: bound entry size to prevent DoS via giant entries
         if data.len() > 10 * 1024 * 1024 {
@@ -104,10 +101,7 @@ impl WalWriter {
         let file = File::create(&self.path)?;
         file.sync_all()
             .map_err(|e| SomaError::Store(format!("WAL truncate fsync: {}", e)))?;
-        drop(std::mem::replace(
-            &mut self.writer,
-            BufWriter::new(file),
-        ));
+        drop(std::mem::replace(&mut self.writer, BufWriter::new(file)));
         self.entry_count = 0;
         Ok(())
     }

@@ -140,9 +140,27 @@ fn starts_upper(s: &str) -> bool {
 fn is_name_connective(w: &str) -> bool {
     matches!(
         w.to_lowercase().as_str(),
-        "of" | "de" | "du" | "des" | "von" | "van" | "di" | "da" | "del"
-            | "la" | "le" | "les" | "el" | "al" | "ibn" | "bin"
-            | "the" | "and" | "und" | "et" | "y" | "e"
+        "of" | "de"
+            | "du"
+            | "des"
+            | "von"
+            | "van"
+            | "di"
+            | "da"
+            | "del"
+            | "la"
+            | "le"
+            | "les"
+            | "el"
+            | "al"
+            | "ibn"
+            | "bin"
+            | "the"
+            | "and"
+            | "und"
+            | "et"
+            | "y"
+            | "e"
     )
 }
 
@@ -211,7 +229,9 @@ mod tests {
 
     #[test]
     fn dedup_entities() {
-        let entities = extract_entities("Albert Einstein studied physics. Later Albert Einstein won the Nobel Prize");
+        let entities = extract_entities(
+            "Albert Einstein studied physics. Later Albert Einstein won the Nobel Prize",
+        );
         let names: Vec<&str> = entities.iter().map(|e| e.name.as_str()).collect();
         let einstein_count = names.iter().filter(|n| **n == "Albert Einstein").count();
         assert_eq!(einstein_count, 1);
@@ -219,9 +239,8 @@ mod tests {
 
     #[test]
     fn cooccurrence_basic() {
-        let entities = extract_entities(
-            "Scott Derrickson directed Doctor Strange for Marvel Studios",
-        );
+        let entities =
+            extract_entities("Scott Derrickson directed Doctor Strange for Marvel Studios");
         let pairs = cooccurrence_pairs(&entities);
         assert!(!pairs.is_empty());
     }

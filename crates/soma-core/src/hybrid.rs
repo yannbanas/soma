@@ -62,7 +62,11 @@ pub fn rrf_merge_with_sources(
         })
         .collect();
 
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     results
 }
 
@@ -109,7 +113,11 @@ pub fn rrf_merge_with_specificity(
         })
         .collect();
 
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     results
 }
 
@@ -128,7 +136,11 @@ pub fn rerank_temporal(
         let spec = specificity.get(&r.label).copied().unwrap_or(0.5);
         r.score *= recency * spec;
     }
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 }
 
 /// MMR (Maximal Marginal Relevance) diversification.
@@ -155,7 +167,8 @@ pub fn mmr_diversify(results: &[HybridResult], limit: usize, lambda: f32) -> Vec
 
         for (i, candidate) in remaining.iter().enumerate() {
             let relevance = candidate.score;
-            let max_sim = selected.iter()
+            let max_sim = selected
+                .iter()
                 .map(|s| word_jaccard(&candidate.label, &s.label))
                 .fold(0.0f32, f32::max);
             let mmr = lambda * relevance - (1.0 - lambda) * max_sim;
@@ -177,10 +190,16 @@ fn word_jaccard(a: &str, b: &str) -> f32 {
     let b_lower = b.to_lowercase();
     let a_words: std::collections::HashSet<&str> = a_lower.split_whitespace().collect();
     let b_words: std::collections::HashSet<&str> = b_lower.split_whitespace().collect();
-    if a_words.is_empty() && b_words.is_empty() { return 1.0; }
+    if a_words.is_empty() && b_words.is_empty() {
+        return 1.0;
+    }
     let intersection = a_words.intersection(&b_words).count() as f32;
     let union = a_words.union(&b_words).count() as f32;
-    if union == 0.0 { 0.0 } else { intersection / union }
+    if union == 0.0 {
+        0.0
+    } else {
+        intersection / union
+    }
 }
 
 /// Strip accents/diacritics from a string for accent-insensitive comparison.
@@ -246,7 +265,7 @@ pub fn fuzzy_label_search(query: &str, labels: &[String], limit: usize) -> Vec<(
                 // Try accent-folded matching
                 let label_folded = fold_accents(&label_lower);
                 if label_folded == query_folded {
-                    0.95  // almost exact, just accent difference
+                    0.95 // almost exact, just accent difference
                 } else if label_folded.starts_with(&query_folded) {
                     0.85
                 } else if label_folded.contains(&query_folded) {
@@ -293,14 +312,8 @@ mod tests {
 
     #[test]
     fn rrf_two_lists_interleave() {
-        let list1 = vec![
-            ("A".to_string(), 0.9),
-            ("B".to_string(), 0.5),
-        ];
-        let list2 = vec![
-            ("B".to_string(), 0.9),
-            ("C".to_string(), 0.5),
-        ];
+        let list1 = vec![("A".to_string(), 0.9), ("B".to_string(), 0.5)];
+        let list2 = vec![("B".to_string(), 0.9), ("C".to_string(), 0.5)];
         let merged = rrf_merge(&[list1, list2], 60.0);
 
         // B appears in both lists → highest RRF score
@@ -344,10 +357,7 @@ mod tests {
 
     #[test]
     fn fuzzy_prefix_match() {
-        let labels = vec![
-            "ChromoQ-variant".to_string(),
-            "xChromoQ".to_string(),
-        ];
+        let labels = vec!["ChromoQ-variant".to_string(), "xChromoQ".to_string()];
         let results = fuzzy_label_search("ChromoQ", &labels, 10);
         // "ChromoQ-variant" is a prefix match (0.9), "xChromoQ" is a contains match (0.7)
         assert_eq!(results[0].0, "ChromoQ-variant");
@@ -366,7 +376,10 @@ mod tests {
     #[test]
     fn rrf_with_sources_tracks_origin() {
         let lists: Vec<(&str, Vec<(String, f32)>)> = vec![
-            ("graph", vec![("A".to_string(), 0.9), ("B".to_string(), 0.5)]),
+            (
+                "graph",
+                vec![("A".to_string(), 0.9), ("B".to_string(), 0.5)],
+            ),
             ("hdc", vec![("B".to_string(), 0.8), ("C".to_string(), 0.3)]),
         ];
         let results = rrf_merge_with_sources(&lists, 60.0);
@@ -381,12 +394,13 @@ mod tests {
 
     #[test]
     fn rrf_specificity_boosts_rare_nodes() {
-        let lists: Vec<(&str, Vec<(String, f32)>)> = vec![
-            ("graph", vec![("hub".to_string(), 0.9), ("leaf".to_string(), 0.5)]),
-        ];
+        let lists: Vec<(&str, Vec<(String, f32)>)> = vec![(
+            "graph",
+            vec![("hub".to_string(), 0.9), ("leaf".to_string(), 0.5)],
+        )];
         let mut specificity = HashMap::new();
-        specificity.insert("hub".to_string(), 0.1);  // low specificity (hub)
-        specificity.insert("leaf".to_string(), 1.0);  // high specificity (leaf)
+        specificity.insert("hub".to_string(), 0.1); // low specificity (hub)
+        specificity.insert("leaf".to_string(), 1.0); // high specificity (leaf)
 
         let results = rrf_merge_with_specificity(&lists, 60.0, &specificity);
 
@@ -398,15 +412,15 @@ mod tests {
         // Hub: RRF * (0.7 + 0.3*0.1) = RRF * 0.73
         // Leaf: RRF * (0.7 + 0.3*1.0) = RRF * 1.0
         // So the leaf gets a bigger boost factor
-        assert!(leaf_score / hub_score > 0.5, "specificity should boost leaf relative to hub");
+        assert!(
+            leaf_score / hub_score > 0.5,
+            "specificity should boost leaf relative to hub"
+        );
     }
 
     #[test]
     fn fuzzy_accent_insensitive() {
-        let labels = vec![
-            "Spéléologie".to_string(),
-            "spéléologie".to_string(),
-        ];
+        let labels = vec!["Spéléologie".to_string(), "spéléologie".to_string()];
         let results = fuzzy_label_search("speleo", &labels, 10);
         assert!(!results.is_empty(), "speleo should match Spéléologie");
         assert_eq!(results[0].0, "Spéléologie");
@@ -422,9 +436,8 @@ mod tests {
 
     #[test]
     fn rrf_specificity_default_weight() {
-        let lists: Vec<(&str, Vec<(String, f32)>)> = vec![
-            ("graph", vec![("unknown".to_string(), 0.9)]),
-        ];
+        let lists: Vec<(&str, Vec<(String, f32)>)> =
+            vec![("graph", vec![("unknown".to_string(), 0.9)])];
         let specificity = HashMap::new(); // empty → default 0.5
 
         let results = rrf_merge_with_specificity(&lists, 60.0, &specificity);

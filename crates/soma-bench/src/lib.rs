@@ -5,8 +5,8 @@
 //!
 //! Metrics: Entity Recall@K, Path Recall, Token F1, Exact Match.
 
+pub mod ablation;
 pub mod loader;
 pub mod metrics;
 pub mod runner;
 pub mod temporal;
-pub mod ablation;

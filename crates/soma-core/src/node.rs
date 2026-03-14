@@ -23,23 +23,23 @@ pub enum NodeKind {
 impl NodeKind {
     pub fn as_str(&self) -> &'static str {
         match self {
-            NodeKind::Entity      => "entity",
-            NodeKind::Concept     => "concept",
-            NodeKind::Event       => "event",
+            NodeKind::Entity => "entity",
+            NodeKind::Concept => "concept",
+            NodeKind::Event => "event",
             NodeKind::Measurement => "measurement",
-            NodeKind::Procedure   => "procedure",
-            NodeKind::Warning     => "warning",
+            NodeKind::Procedure => "procedure",
+            NodeKind::Warning => "warning",
         }
     }
 
     pub fn from_str_name(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
-            "entity"      => Some(NodeKind::Entity),
-            "concept"     => Some(NodeKind::Concept),
-            "event"       => Some(NodeKind::Event),
+            "entity" => Some(NodeKind::Entity),
+            "concept" => Some(NodeKind::Concept),
+            "event" => Some(NodeKind::Event),
             "measurement" => Some(NodeKind::Measurement),
-            "procedure"   => Some(NodeKind::Procedure),
-            "warning"     => Some(NodeKind::Warning),
+            "procedure" => Some(NodeKind::Procedure),
+            "warning" => Some(NodeKind::Warning),
             _ => None,
         }
     }

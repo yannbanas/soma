@@ -4,11 +4,11 @@
 //! Supports MATCH, WHERE, RETURN, CREATE, DELETE with SOMA's bio-inspired edges.
 
 mod ast;
+mod executor;
 mod lexer;
 mod parser;
-mod executor;
 
 pub use ast::*;
-pub use lexer::{Token, Lexer};
-pub use parser::Parser;
 pub use executor::{CypherExecutor, CypherResult, CypherValue};
+pub use lexer::{Lexer, Token};
+pub use parser::Parser;

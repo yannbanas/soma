@@ -68,7 +68,11 @@ impl AdjacencyCache {
 
         // Sort each adjacency list by intensity descending for best-first traversal
         for list in &mut self.adj {
-            list.sort_by(|a, b| b.intensity.partial_cmp(&a.intensity).unwrap_or(std::cmp::Ordering::Equal));
+            list.sort_by(|a, b| {
+                b.intensity
+                    .partial_cmp(&a.intensity)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
         }
 
         self.built_at = now;
@@ -157,7 +161,7 @@ impl Default for AdjacencyCache {
 mod tests {
     use super::*;
     use petgraph::graph::DiGraph;
-    use soma_core::{NodeKind, SomaNode, StigreEdge, NodeId};
+    use soma_core::{NodeId, NodeKind, SomaNode, StigreEdge};
 
     fn make_test_graph() -> DiGraph<SomaNode, StigreEdge> {
         let mut g = DiGraph::new();
@@ -169,9 +173,21 @@ mod tests {
         let id_b = NodeId::from_label("test:B");
         let id_c = NodeId::from_label("test:C");
 
-        g.add_edge(a, b, StigreEdge::new(id_a, id_b, Channel::Trail, 0.9, "test".into()));
-        g.add_edge(a, c, StigreEdge::new(id_a, id_c, Channel::Causal, 0.7, "test".into()));
-        g.add_edge(b, c, StigreEdge::new(id_b, id_c, Channel::Trail, 0.5, "test".into()));
+        g.add_edge(
+            a,
+            b,
+            StigreEdge::new(id_a, id_b, Channel::Trail, 0.9, "test".into()),
+        );
+        g.add_edge(
+            a,
+            c,
+            StigreEdge::new(id_a, id_c, Channel::Causal, 0.7, "test".into()),
+        );
+        g.add_edge(
+            b,
+            c,
+            StigreEdge::new(id_b, id_c, Channel::Trail, 0.5, "test".into()),
+        );
         g
     }
 
@@ -200,16 +216,16 @@ mod tests {
         cache.rebuild(&g);
 
         // Filter by Trail channel only
-        let trail_edges: Vec<_> = cache.outgoing_filtered(
-            NodeIndex::new(0), &[Channel::Trail], 0.0, None, None,
-        ).collect();
+        let trail_edges: Vec<_> = cache
+            .outgoing_filtered(NodeIndex::new(0), &[Channel::Trail], 0.0, None, None)
+            .collect();
         assert_eq!(trail_edges.len(), 1);
         assert_eq!(trail_edges[0].channel, Channel::Trail);
 
         // Filter by min intensity 0.8 — only Trail(0.9) passes
-        let high_edges: Vec<_> = cache.outgoing_filtered(
-            NodeIndex::new(0), &[], 0.8, None, None,
-        ).collect();
+        let high_edges: Vec<_> = cache
+            .outgoing_filtered(NodeIndex::new(0), &[], 0.8, None, None)
+            .collect();
         assert_eq!(high_edges.len(), 1);
     }
 

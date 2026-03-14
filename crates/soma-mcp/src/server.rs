@@ -50,15 +50,14 @@ impl McpServer {
 
             let response = self.process_message(&line).await;
 
-            let json = serde_json::to_string(&response)
-                .unwrap_or_else(|e| {
-                    serde_json::to_string(&McpResponse::error(
-                        None,
-                        -32603,
-                        &format!("serialization error: {}", e),
-                    ))
-                    .unwrap()
-                });
+            let json = serde_json::to_string(&response).unwrap_or_else(|e| {
+                serde_json::to_string(&McpResponse::error(
+                    None,
+                    -32603,
+                    &format!("serialization error: {}", e),
+                ))
+                .unwrap()
+            });
 
             if let Err(e) = stdout.write_all(json.as_bytes()).await {
                 error!("[mcp] stdout write error: {}", e);
@@ -131,21 +130,19 @@ impl McpServer {
         };
 
         match request.method.as_str() {
-            "initialize" => {
-                McpResponse::success(
-                    request.id,
-                    serde_json::json!({
-                        "protocolVersion": "2024-11-05",
-                        "capabilities": {
-                            "tools": {}
-                        },
-                        "serverInfo": {
-                            "name": "soma",
-                            "version": "0.1.0"
-                        }
-                    }),
-                )
-            }
+            "initialize" => McpResponse::success(
+                request.id,
+                serde_json::json!({
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {
+                        "tools": {}
+                    },
+                    "serverInfo": {
+                        "name": "soma",
+                        "version": "0.1.0"
+                    }
+                }),
+            ),
             "tools/list" => {
                 let tools = protocol::soma_tools();
                 McpResponse::success(request.id, serde_json::json!({"tools": tools}))

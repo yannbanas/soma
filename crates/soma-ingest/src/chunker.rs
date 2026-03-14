@@ -116,12 +116,15 @@ mod tests {
         let chunker = Chunker::new(2, 1);
         let text = "Sentence one here. Sentence two here. Sentence three here.";
         let chunks = chunker.chunk(text);
-        assert!(chunks.len() >= 2, "Need at least 2 chunks, got {}", chunks.len());
+        assert!(
+            chunks.len() >= 2,
+            "Need at least 2 chunks, got {}",
+            chunks.len()
+        );
         // With overlap=1, the last sentence of chunk[0] should appear in chunk[1]
         let last_sentence_of_first = chunks[0]
             .split('.')
-            .filter(|s| s.trim().len() >= 5)
-            .last()
+            .rfind(|s| s.trim().len() >= 5)
             .unwrap_or("")
             .trim();
         assert!(

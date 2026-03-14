@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 /// Input sources for SOMA ingestion.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,9 +37,7 @@ impl IngestSource {
                 // Security: validate path (no traversal)
                 let path_str = path.to_string_lossy();
                 if path_str.contains("..") {
-                    return Err(soma_core::SomaError::PathTraversal(
-                        path_str.to_string(),
-                    ));
+                    return Err(soma_core::SomaError::PathTraversal(path_str.to_string()));
                 }
                 let content = std::fs::read_to_string(path)?;
                 if content.len() > 10 * 1024 * 1024 {
@@ -53,9 +51,7 @@ impl IngestSource {
             IngestSource::ClaudeConversation(path) => {
                 let path_str = path.to_string_lossy();
                 if path_str.contains("..") {
-                    return Err(soma_core::SomaError::PathTraversal(
-                        path_str.to_string(),
-                    ));
+                    return Err(soma_core::SomaError::PathTraversal(path_str.to_string()));
                 }
                 let content = std::fs::read_to_string(path)?;
                 // Parse Claude JSON and extract messages
@@ -87,10 +83,8 @@ impl IngestSource {
                     "URL ingestion not yet implemented".to_string(),
                 ))
             }
-            IngestSource::Structured(value) => {
-                Ok(serde_json::to_string_pretty(value)
-                    .map_err(|e| soma_core::SomaError::Serialization(e.to_string()))?)
-            }
+            IngestSource::Structured(value) => Ok(serde_json::to_string_pretty(value)
+                .map_err(|e| soma_core::SomaError::Serialization(e.to_string()))?),
         }
     }
 }

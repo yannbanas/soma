@@ -36,6 +36,7 @@ struct CodeSymbol {
     /// Trait being implemented (for impl blocks)
     implements: Option<String>,
     /// Cyclomatic complexity estimate
+    #[allow(dead_code)]
     complexity: u32,
 }
 
@@ -64,7 +65,7 @@ pub fn ingest_rust_directory(
         .filter_map(|e| e.ok())
     {
         let path = entry.path();
-        if path.extension().map_or(false, |ext| ext == "rs")
+        if path.extension().is_some_and(|ext| ext == "rs")
             && !path.to_string_lossy().contains("/target/")
         {
             files.push(path.to_path_buf());
@@ -122,9 +123,7 @@ pub fn ingest_rust_directory(
                 result.impls_found += 1;
                 continue; // Impl blocks create edges, not nodes
             }
-            SymbolKind::Mod => {
-                (vec!["module".into(), "rust".into()], NodeKind::Entity)
-            }
+            SymbolKind::Mod => (vec!["module".into(), "rust".into()], NodeKind::Entity),
         };
 
         let node_id = graph.upsert_node_with_tags(&sym.name, kind, tags);
@@ -396,12 +395,10 @@ fn extract_function_calls(block: &syn::Block) -> Vec<String> {
     let tokens: Vec<&str> = source.split_whitespace().collect();
     for token in &tokens {
         if let Some(name) = (*token).strip_suffix('(') {
-            let clean: &str = name
-                .trim_start_matches('&')
-                .trim_start_matches("mut ");
+            let clean: &str = name.trim_start_matches('&').trim_start_matches("mut ");
             let clean: &str = clean.rsplit("::").next().unwrap_or(clean);
             if !clean.is_empty()
-                && clean.chars().next().map_or(false, |c: char| c.is_lowercase())
+                && clean.chars().next().is_some_and(|c: char| c.is_lowercase())
                 && !is_rust_keyword(clean)
             {
                 let owned = clean.to_string();
@@ -439,12 +436,11 @@ fn collect_type_names(ty: &syn::Type, names: &mut Vec<String>) {
         syn::Type::Path(tp) => {
             if let Some(seg) = tp.path.segments.last() {
                 let name = seg.ident.to_string();
-                if name.chars().next().map_or(false, |c| c.is_uppercase())
+                if name.chars().next().is_some_and(|c| c.is_uppercase())
                     && !is_std_type(&name)
+                    && !names.contains(&name)
                 {
-                    if !names.contains(&name) {
-                        names.push(name);
-                    }
+                    names.push(name);
                 }
             }
         }
@@ -465,7 +461,9 @@ fn estimate_complexity(block: &syn::Block) -> u32 {
     let source: String = quote::quote!(#block).to_string();
     let mut complexity = 1u32;
 
-    for keyword in ["if ", "else if", "match ", "for ", "while ", "loop ", "&&", "||", "?"] {
+    for keyword in [
+        "if ", "else if", "match ", "for ", "while ", "loop ", "&&", "||", "?",
+    ] {
         complexity += source.matches(keyword).count() as u32;
     }
 
@@ -491,23 +489,92 @@ fn span_to_line(span: &proc_macro2::Span, _lines: &[&str]) -> usize {
 fn is_rust_keyword(s: &str) -> bool {
     matches!(
         s,
-        "if" | "else" | "match" | "for" | "while" | "loop" | "let" | "mut" | "ref"
-            | "return" | "break" | "continue" | "fn" | "pub" | "use" | "mod" | "struct"
-            | "enum" | "trait" | "impl" | "where" | "as" | "in" | "self" | "super"
-            | "crate" | "type" | "const" | "static" | "async" | "await" | "move"
-            | "dyn" | "unsafe" | "extern" | "true" | "false" | "some" | "none" | "ok" | "err"
+        "if" | "else"
+            | "match"
+            | "for"
+            | "while"
+            | "loop"
+            | "let"
+            | "mut"
+            | "ref"
+            | "return"
+            | "break"
+            | "continue"
+            | "fn"
+            | "pub"
+            | "use"
+            | "mod"
+            | "struct"
+            | "enum"
+            | "trait"
+            | "impl"
+            | "where"
+            | "as"
+            | "in"
+            | "self"
+            | "super"
+            | "crate"
+            | "type"
+            | "const"
+            | "static"
+            | "async"
+            | "await"
+            | "move"
+            | "dyn"
+            | "unsafe"
+            | "extern"
+            | "true"
+            | "false"
+            | "some"
+            | "none"
+            | "ok"
+            | "err"
     )
 }
 
 fn is_std_type(s: &str) -> bool {
     matches!(
         s,
-        "String" | "Vec" | "HashMap" | "HashSet" | "Option" | "Result" | "Box" | "Arc"
-            | "Rc" | "Mutex" | "RwLock" | "Cell" | "RefCell" | "Cow" | "Pin"
-            | "Future" | "Iterator" | "Display" | "Debug" | "Clone" | "Copy"
-            | "Default" | "Send" | "Sync" | "Sized" | "Drop" | "From" | "Into"
-            | "AsRef" | "AsMut" | "Deref" | "DerefMut" | "Fn" | "FnMut" | "FnOnce"
-            | "Serialize" | "Deserialize" | "Self" | "PathBuf" | "Path"
+        "String"
+            | "Vec"
+            | "HashMap"
+            | "HashSet"
+            | "Option"
+            | "Result"
+            | "Box"
+            | "Arc"
+            | "Rc"
+            | "Mutex"
+            | "RwLock"
+            | "Cell"
+            | "RefCell"
+            | "Cow"
+            | "Pin"
+            | "Future"
+            | "Iterator"
+            | "Display"
+            | "Debug"
+            | "Clone"
+            | "Copy"
+            | "Default"
+            | "Send"
+            | "Sync"
+            | "Sized"
+            | "Drop"
+            | "From"
+            | "Into"
+            | "AsRef"
+            | "AsMut"
+            | "Deref"
+            | "DerefMut"
+            | "Fn"
+            | "FnMut"
+            | "FnOnce"
+            | "Serialize"
+            | "Deserialize"
+            | "Self"
+            | "PathBuf"
+            | "Path"
     )
 }
 
@@ -548,8 +615,12 @@ mod tests {
         let symbols = parse_rust_file(code, "test.rs");
         // Should find: MyGraph (struct) + MyGraph::new (fn) + MyGraph::add_node (fn)
         assert!(symbols.len() >= 3);
-        assert!(symbols.iter().any(|s| s.name == "MyGraph" && s.kind == SymbolKind::Struct));
-        assert!(symbols.iter().any(|s| s.name == "MyGraph::new" && s.kind == SymbolKind::Function));
+        assert!(symbols
+            .iter()
+            .any(|s| s.name == "MyGraph" && s.kind == SymbolKind::Struct));
+        assert!(symbols
+            .iter()
+            .any(|s| s.name == "MyGraph::new" && s.kind == SymbolKind::Function));
     }
 
     #[test]
@@ -568,8 +639,12 @@ mod tests {
             }
         "#;
         let symbols = parse_rust_file(code, "test.rs");
-        assert!(symbols.iter().any(|s| s.name == "Searchable" && s.kind == SymbolKind::Trait));
-        assert!(symbols.iter().any(|s| s.kind == SymbolKind::Impl && s.implements == Some("Searchable".into())));
+        assert!(symbols
+            .iter()
+            .any(|s| s.name == "Searchable" && s.kind == SymbolKind::Trait));
+        assert!(symbols
+            .iter()
+            .any(|s| s.kind == SymbolKind::Impl && s.implements == Some("Searchable".into())));
     }
 
     #[test]
@@ -612,13 +687,20 @@ mod tests {
         let symbols = parse_rust_file(code, "test.rs");
         assert!(!symbols.is_empty());
         // Should have complexity > 1 (has if, match, for)
-        assert!(symbols[0].complexity > 3, "complexity={}", symbols[0].complexity);
+        assert!(
+            symbols[0].complexity > 3,
+            "complexity={}",
+            symbols[0].complexity
+        );
     }
 
     #[test]
     fn ingest_real_directory() {
         // Ingest the soma-core crate as a test
-        let soma_core = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("soma-core/src");
+        let soma_core = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("soma-core/src");
         if soma_core.exists() {
             let mut graph = StigreGraph::new("test-code", 0.05);
             let result = ingest_rust_directory(&mut graph, &soma_core, "test");

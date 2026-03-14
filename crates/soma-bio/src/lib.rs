@@ -8,4 +8,4 @@
 
 mod scheduler;
 
-pub use scheduler::{BioScheduler, BioConfig};
+pub use scheduler::{BioConfig, BioScheduler};

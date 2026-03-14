@@ -5,7 +5,7 @@ use crate::channel::Channel;
 use crate::ids::{EdgeId, NodeId};
 
 /// Provenance tracks how an edge was created/validated.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Provenance {
     /// Created by human input
     Human,
@@ -14,13 +14,8 @@ pub enum Provenance {
     /// Validated by AI against external source
     AiValidated,
     /// Automated extraction (ingestion pipeline, code analysis)
+    #[default]
     Automated,
-}
-
-impl Default for Provenance {
-    fn default() -> Self {
-        Provenance::Automated
-    }
 }
 
 impl std::fmt::Display for Provenance {
@@ -130,10 +125,7 @@ impl StigreEdge {
         if tau == 0.0 {
             return self.intensity;
         }
-        let dt_hours = (now - self.last_touch)
-            .num_seconds()
-            .max(0) as f32
-            / 3600.0;
+        let dt_hours = (now - self.last_touch).num_seconds().max(0) as f32 / 3600.0;
         self.intensity * (-tau * dt_hours).exp()
     }
 

@@ -54,8 +54,8 @@ impl SnapshotWriter {
             hdc_json: hdc_data.map(|s| s.to_string()),
         };
 
-        let json = serde_json::to_vec(&snapshot)
-            .map_err(|e| SomaError::Serialization(e.to_string()))?;
+        let json =
+            serde_json::to_vec(&snapshot).map_err(|e| SomaError::Serialization(e.to_string()))?;
 
         // Compress with zstd (level 3 — good balance speed/compression)
         let compressed = zstd::encode_all(json.as_slice(), 3)
@@ -141,10 +141,7 @@ mod tests {
 
     #[test]
     fn snapshot_roundtrip() {
-        let path = std::env::temp_dir().join(format!(
-            "soma_test_snap_{}.soma",
-            std::process::id()
-        ));
+        let path = std::env::temp_dir().join(format!("soma_test_snap_{}.soma", std::process::id()));
         let _ = fs::remove_file(&path);
 
         let graph_data = r#"{"nodes":[],"edges":[]}"#;
@@ -161,11 +158,13 @@ mod tests {
 
     #[test]
     fn invalid_magic_rejected() {
-        let path = std::env::temp_dir().join(format!(
-            "soma_test_bad_snap_{}.soma",
-            std::process::id()
-        ));
-        fs::write(&path, b"BADM\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00").unwrap();
+        let path =
+            std::env::temp_dir().join(format!("soma_test_bad_snap_{}.soma", std::process::id()));
+        fs::write(
+            &path,
+            b"BADM\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+        )
+        .unwrap();
 
         let result = SnapshotReader::read(&path);
         assert!(result.is_err());

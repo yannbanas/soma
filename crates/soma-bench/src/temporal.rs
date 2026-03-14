@@ -41,11 +41,23 @@ pub fn generate_temporal_dataset() -> (Vec<TemporalFact>, Vec<TemporalQuery>) {
 
     // ── Category 1: CEO succession ─────────────────────────────
     let companies = [
-        "Acme Corp", "Nexus Inc", "Orion Labs", "Zenith AI", "Cortex Systems",
-        "Meridian Bio", "Atlas Robotics", "Prism Networks", "Helix Genomics", "Quantum Dynamics",
+        "Acme Corp",
+        "Nexus Inc",
+        "Orion Labs",
+        "Zenith AI",
+        "Cortex Systems",
+        "Meridian Bio",
+        "Atlas Robotics",
+        "Prism Networks",
+        "Helix Genomics",
+        "Quantum Dynamics",
     ];
-    let ceo_old = ["Alice", "Bob", "Carol", "Dave", "Eve", "Frank", "Grace", "Heidi", "Ivan", "Judy"];
-    let ceo_new = ["Xavier", "Yolanda", "Zack", "Wendy", "Victor", "Uma", "Tom", "Sara", "Rick", "Quinn"];
+    let ceo_old = [
+        "Alice", "Bob", "Carol", "Dave", "Eve", "Frank", "Grace", "Heidi", "Ivan", "Judy",
+    ];
+    let ceo_new = [
+        "Xavier", "Yolanda", "Zack", "Wendy", "Victor", "Uma", "Tom", "Sara", "Rick", "Quinn",
+    ];
 
     for i in 0..10 {
         facts.push(TemporalFact {
@@ -74,11 +86,23 @@ pub fn generate_temporal_dataset() -> (Vec<TemporalFact>, Vec<TemporalQuery>) {
 
     // ── Category 2: Version updates ────────────────────────────
     let projects = [
-        "SwarmOS", "MorphLang", "ZetaFold", "NanoKit", "BioSDK",
-        "QuantumLib", "NeuralForge", "DataPipe", "CryptoMesh", "EdgeRuntime",
+        "SwarmOS",
+        "MorphLang",
+        "ZetaFold",
+        "NanoKit",
+        "BioSDK",
+        "QuantumLib",
+        "NeuralForge",
+        "DataPipe",
+        "CryptoMesh",
+        "EdgeRuntime",
     ];
-    let ver_old = ["v1.0", "v2.3", "v0.9", "v3.1", "v1.5", "v2.0", "v4.0", "v1.2", "v0.8", "v3.3"];
-    let ver_new = ["v2.0", "v3.0", "v1.0", "v4.0", "v2.0", "v3.0", "v5.0", "v2.0", "v1.0", "v4.0"];
+    let ver_old = [
+        "v1.0", "v2.3", "v0.9", "v3.1", "v1.5", "v2.0", "v4.0", "v1.2", "v0.8", "v3.3",
+    ];
+    let ver_new = [
+        "v2.0", "v3.0", "v1.0", "v4.0", "v2.0", "v3.0", "v5.0", "v2.0", "v1.0", "v4.0",
+    ];
 
     for i in 0..10 {
         facts.push(TemporalFact {
@@ -107,16 +131,40 @@ pub fn generate_temporal_dataset() -> (Vec<TemporalFact>, Vec<TemporalQuery>) {
 
     // ── Category 3: Location changes ───────────────────────────
     let orgs = [
-        "TechHQ", "BioLab", "DataCenter", "ResearchDiv", "AIUnit",
-        "CloudOps", "DevTeam", "SecOps", "MLGroup", "SysAdmin",
+        "TechHQ",
+        "BioLab",
+        "DataCenter",
+        "ResearchDiv",
+        "AIUnit",
+        "CloudOps",
+        "DevTeam",
+        "SecOps",
+        "MLGroup",
+        "SysAdmin",
     ];
     let loc_old = [
-        "New York", "Boston", "London", "Berlin", "Tokyo",
-        "Sydney", "Toronto", "Paris", "Seoul", "Singapore",
+        "New York",
+        "Boston",
+        "London",
+        "Berlin",
+        "Tokyo",
+        "Sydney",
+        "Toronto",
+        "Paris",
+        "Seoul",
+        "Singapore",
     ];
     let loc_new = [
-        "San Francisco", "Austin", "Dublin", "Munich", "Osaka",
-        "Melbourne", "Vancouver", "Lyon", "Busan", "Jakarta",
+        "San Francisco",
+        "Austin",
+        "Dublin",
+        "Munich",
+        "Osaka",
+        "Melbourne",
+        "Vancouver",
+        "Lyon",
+        "Busan",
+        "Jakarta",
     ];
 
     for i in 0..10 {
@@ -146,16 +194,40 @@ pub fn generate_temporal_dataset() -> (Vec<TemporalFact>, Vec<TemporalQuery>) {
 
     // ── Category 4: Status changes ─────────────────────────────
     let items = [
-        "ProjectAlpha", "ProjectBeta", "ProjectGamma", "ProjectDelta", "ProjectEpsilon",
-        "LibFoo", "LibBar", "LibBaz", "LibQux", "LibCorge",
+        "ProjectAlpha",
+        "ProjectBeta",
+        "ProjectGamma",
+        "ProjectDelta",
+        "ProjectEpsilon",
+        "LibFoo",
+        "LibBar",
+        "LibBaz",
+        "LibQux",
+        "LibCorge",
     ];
     let status_old = [
-        "active", "preview", "experimental", "stable", "active",
-        "supported", "active", "preview", "experimental", "stable",
+        "active",
+        "preview",
+        "experimental",
+        "stable",
+        "active",
+        "supported",
+        "active",
+        "preview",
+        "experimental",
+        "stable",
     ];
     let status_new = [
-        "deprecated", "released", "released", "legacy", "archived",
-        "abandoned", "deprecated", "released", "released", "legacy",
+        "deprecated",
+        "released",
+        "released",
+        "legacy",
+        "archived",
+        "abandoned",
+        "deprecated",
+        "released",
+        "released",
+        "legacy",
     ];
 
     for i in 0..10 {
@@ -264,6 +336,7 @@ pub fn temporal_accuracy(results: &[(Option<usize>, Option<usize>)]) -> f32 {
 /// Run the full temporal benchmark.
 ///
 /// Returns: (temporal_accuracy, results_per_query)
+#[allow(clippy::type_complexity)]
 pub fn run_temporal_benchmark(k: usize) -> (f32, Vec<(Option<usize>, Option<usize>)>) {
     let (facts, queries) = generate_temporal_dataset();
     let mut graph = StigreGraph::new("temporal-bench", 0.05);

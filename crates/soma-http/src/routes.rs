@@ -3,19 +3,19 @@ use std::convert::Infallible;
 use std::time::Duration;
 
 use axum::{
-    Json, Router,
     extract::{Query, State},
     http::StatusCode,
-    response::{IntoResponse, Sse},
     response::sse::{Event, KeepAlive},
-    routing::{get, post, delete},
+    response::{IntoResponse, Sse},
+    routing::{delete, get, post},
+    Json, Router,
 };
 use chrono::Utc;
 use futures::stream::Stream;
 use serde::Deserialize;
 use serde_json::json;
-use tokio_stream::StreamExt as _;
 use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::StreamExt as _;
 
 use crate::{AppState, WebhookRegistration};
 
@@ -89,8 +89,12 @@ struct GraphParams {
     depth: usize,
 }
 
-fn default_graph_limit() -> usize { 200 }
-fn default_depth() -> usize { 1 }
+fn default_graph_limit() -> usize {
+    200
+}
+fn default_depth() -> usize {
+    1
+}
 
 async fn graph_data(
     State(state): State<AppState>,
@@ -140,7 +144,8 @@ async fn graph_data(
         }
     } else {
         // Top-N mode: sort by degree descending, take top limit
-        let mut all_labels: Vec<(String, usize)> = g.all_nodes()
+        let mut all_labels: Vec<(String, usize)> = g
+            .all_nodes()
             .map(|n| (n.label.clone(), degrees.get(&n.label).copied().unwrap_or(0)))
             .collect();
 
@@ -152,7 +157,8 @@ async fn graph_data(
         // Apply tag filter
         if let Some(ref tag) = params.tag {
             let tag_lower = tag.to_lowercase();
-            let tag_labels: std::collections::HashSet<String> = g.all_nodes()
+            let tag_labels: std::collections::HashSet<String> = g
+                .all_nodes()
                 .filter(|n| n.tags.iter().any(|t| t.to_lowercase().contains(&tag_lower)))
                 .map(|n| n.label.clone())
                 .collect();
@@ -163,13 +169,18 @@ async fn graph_data(
         all_labels.sort_by(|a, b| b.1.cmp(&a.1));
 
         // Apply limit
-        let limit = if params.limit == 0 { all_labels.len() } else { params.limit };
+        let limit = if params.limit == 0 {
+            all_labels.len()
+        } else {
+            params.limit
+        };
         for (label, _) in all_labels.into_iter().take(limit) {
             visible_labels.insert(label);
         }
     }
 
-    let nodes: Vec<_> = g.all_nodes()
+    let nodes: Vec<_> = g
+        .all_nodes()
         .filter(|n| visible_labels.contains(&n.label))
         .map(|n| {
             let degree = degrees.get(&n.label).copied().unwrap_or(0);
@@ -180,23 +191,27 @@ async fn graph_data(
                 "tags": n.tags,
                 "created": n.created_at.format("%Y-%m-%d %H:%M").to_string(),
             })
-        }).collect();
+        })
+        .collect();
 
-    let links: Vec<_> = g.all_edges().filter_map(|e| {
-        let from = g.get_node(e.from)?;
-        let to = g.get_node(e.to)?;
-        // Only include edges where both endpoints are visible
-        if !visible_labels.contains(&from.label) || !visible_labels.contains(&to.label) {
-            return None;
-        }
-        Some(json!({
-            "source": from.label,
-            "target": to.label,
-            "channel": e.channel.to_string(),
-            "intensity": e.effective_intensity(now),
-            "uses": e.uses,
-        }))
-    }).collect();
+    let links: Vec<_> = g
+        .all_edges()
+        .filter_map(|e| {
+            let from = g.get_node(e.from)?;
+            let to = g.get_node(e.to)?;
+            // Only include edges where both endpoints are visible
+            if !visible_labels.contains(&from.label) || !visible_labels.contains(&to.label) {
+                return None;
+            }
+            Some(json!({
+                "source": from.label,
+                "target": to.label,
+                "channel": e.channel.to_string(),
+                "intensity": e.effective_intensity(now),
+                "uses": e.uses,
+            }))
+        })
+        .collect();
 
     Json(json!({
         "nodes": nodes,
@@ -226,7 +241,10 @@ async fn health(State(state): State<AppState>) -> impl IntoResponse {
 // ── Stats ───────────────────────────────────────────────────────────
 
 async fn stats(State(state): State<AppState>) -> impl IntoResponse {
-    let resp = state.tool_handler.handle("soma_stats", &json!({}), None).await;
+    let resp = state
+        .tool_handler
+        .handle("soma_stats", &json!({}), None)
+        .await;
     mcp_to_http(resp)
 }
 
@@ -239,17 +257,22 @@ struct SearchParams {
     limit: usize,
 }
 
-fn default_limit() -> usize { 20 }
+fn default_limit() -> usize {
+    20
+}
 
 async fn search(
     State(state): State<AppState>,
     Query(params): Query<SearchParams>,
 ) -> impl IntoResponse {
-    let resp = state.tool_handler.handle(
-        "soma_search",
-        &json!({"query": params.q, "limit": params.limit}),
-        None,
-    ).await;
+    let resp = state
+        .tool_handler
+        .handle(
+            "soma_search",
+            &json!({"query": params.q, "limit": params.limit}),
+            None,
+        )
+        .await;
     mcp_to_http(resp)
 }
 
@@ -264,11 +287,10 @@ async fn context(
     State(state): State<AppState>,
     Query(params): Query<ContextParams>,
 ) -> impl IntoResponse {
-    let resp = state.tool_handler.handle(
-        "soma_context",
-        &json!({"query": params.q}),
-        None,
-    ).await;
+    let resp = state
+        .tool_handler
+        .handle("soma_context", &json!({"query": params.q}), None)
+        .await;
     mcp_to_http(resp)
 }
 
@@ -283,10 +305,7 @@ struct AddRequest {
     tags: Vec<String>,
 }
 
-async fn add(
-    State(state): State<AppState>,
-    Json(req): Json<AddRequest>,
-) -> impl IntoResponse {
+async fn add(State(state): State<AppState>, Json(req): Json<AddRequest>) -> impl IntoResponse {
     let mut params = json!({"content": req.content});
     if let Some(src) = &req.source {
         params["source"] = json!(src);
@@ -309,11 +328,10 @@ async fn ingest(
     State(state): State<AppState>,
     Json(req): Json<IngestRequest>,
 ) -> impl IntoResponse {
-    let resp = state.tool_handler.handle(
-        "soma_ingest",
-        &json!({"path": req.path}),
-        None,
-    ).await;
+    let resp = state
+        .tool_handler
+        .handle("soma_ingest", &json!({"path": req.path}), None)
+        .await;
     mcp_to_http(resp)
 }
 
@@ -331,7 +349,9 @@ struct RelateRequest {
     label: Option<String>,
 }
 
-fn default_confidence() -> f32 { 0.8 }
+fn default_confidence() -> f32 {
+    0.8
+}
 
 async fn relate(
     State(state): State<AppState>,
@@ -346,7 +366,10 @@ async fn relate(
     if let Some(label) = &req.label {
         params["label"] = json!(label);
     }
-    let resp = state.tool_handler.handle("soma_relate", &params, None).await;
+    let resp = state
+        .tool_handler
+        .handle("soma_relate", &params, None)
+        .await;
     mcp_to_http(resp)
 }
 
@@ -362,11 +385,14 @@ async fn reinforce(
     State(state): State<AppState>,
     Json(req): Json<ReinforceRequest>,
 ) -> impl IntoResponse {
-    let resp = state.tool_handler.handle(
-        "soma_reinforce",
-        &json!({"from": req.from, "to": req.to}),
-        None,
-    ).await;
+    let resp = state
+        .tool_handler
+        .handle(
+            "soma_reinforce",
+            &json!({"from": req.from, "to": req.to}),
+            None,
+        )
+        .await;
     mcp_to_http(resp)
 }
 
@@ -378,15 +404,15 @@ struct AlarmRequest {
     reason: String,
 }
 
-async fn alarm(
-    State(state): State<AppState>,
-    Json(req): Json<AlarmRequest>,
-) -> impl IntoResponse {
-    let resp = state.tool_handler.handle(
-        "soma_alarm",
-        &json!({"label": req.label, "reason": req.reason}),
-        None,
-    ).await;
+async fn alarm(State(state): State<AppState>, Json(req): Json<AlarmRequest>) -> impl IntoResponse {
+    let resp = state
+        .tool_handler
+        .handle(
+            "soma_alarm",
+            &json!({"label": req.label, "reason": req.reason}),
+            None,
+        )
+        .await;
     mcp_to_http(resp)
 }
 
@@ -401,21 +427,17 @@ async fn forget(
     State(state): State<AppState>,
     Json(req): Json<ForgetRequest>,
 ) -> impl IntoResponse {
-    let resp = state.tool_handler.handle(
-        "soma_forget",
-        &json!({"label": req.label}),
-        None,
-    ).await;
+    let resp = state
+        .tool_handler
+        .handle("soma_forget", &json!({"label": req.label}), None)
+        .await;
     mcp_to_http(resp)
 }
 
 // ── Sleep (manual consolidation) ────────────────────────────────────
 
 async fn sleep(State(state): State<AppState>) -> impl IntoResponse {
-    let report = soma_bio::BioScheduler::consolidate_once(
-        &state.graph,
-        &state.store,
-    ).await;
+    let report = soma_bio::BioScheduler::consolidate_once(&state.graph, &state.store).await;
     Json(json!(report))
 }
 
@@ -430,21 +452,15 @@ async fn snapshot(State(state): State<AppState>) -> impl IntoResponse {
             drop(g);
             let mut s = state.store.write().await;
             match s.write_snapshot(&graph_json, None, stats.nodes, stats.edges) {
-                Ok(_) => {
-                    Json(json!({
-                        "saved": true,
-                        "nodes": stats.nodes,
-                        "edges": stats.edges,
-                    }))
-                }
-                Err(e) => {
-                    Json(json!({"saved": false, "error": format!("{}", e)}))
-                }
+                Ok(_) => Json(json!({
+                    "saved": true,
+                    "nodes": stats.nodes,
+                    "edges": stats.edges,
+                })),
+                Err(e) => Json(json!({"saved": false, "error": format!("{}", e)})),
             }
         }
-        Err(e) => {
-            Json(json!({"saved": false, "error": format!("{}", e)}))
-        }
+        Err(e) => Json(json!({"saved": false, "error": format!("{}", e)})),
     }
 }
 
@@ -479,20 +495,26 @@ async fn ingest_code(
 ) -> impl IntoResponse {
     let path = std::path::Path::new(&req.path);
     if !path.exists() {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Path does not exist"})));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Path does not exist"})),
+        );
     }
 
     let mut g = state.graph.write().await;
     let result = soma_ingest::code::ingest_rust_directory(&mut g, path, "http/ingest-code");
 
-    (StatusCode::OK, Json(json!({
-        "files_processed": result.files_processed,
-        "functions_found": result.functions_found,
-        "structs_found": result.structs_found,
-        "traits_found": result.traits_found,
-        "impls_found": result.impls_found,
-        "edges_created": result.edges_created,
-    })))
+    (
+        StatusCode::OK,
+        Json(json!({
+            "files_processed": result.files_processed,
+            "functions_found": result.functions_found,
+            "structs_found": result.structs_found,
+            "traits_found": result.traits_found,
+            "impls_found": result.impls_found,
+            "edges_created": result.edges_created,
+        })),
+    )
 }
 
 // ── New SOMA v3 Tools (HTTP routes) ─────────────────────────────────
@@ -501,7 +523,10 @@ async fn correct(
     State(state): State<AppState>,
     Json(params): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    let resp = state.tool_handler.handle("soma_correct", &params, None).await;
+    let resp = state
+        .tool_handler
+        .handle("soma_correct", &params, None)
+        .await;
     mcp_to_http(resp)
 }
 
@@ -509,7 +534,10 @@ async fn validate(
     State(state): State<AppState>,
     Json(params): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    let resp = state.tool_handler.handle("soma_validate", &params, None).await;
+    let resp = state
+        .tool_handler
+        .handle("soma_validate", &params, None)
+        .await;
     mcp_to_http(resp)
 }
 
@@ -517,7 +545,10 @@ async fn compact(
     State(state): State<AppState>,
     Json(params): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    let resp = state.tool_handler.handle("soma_compact", &params, None).await;
+    let resp = state
+        .tool_handler
+        .handle("soma_compact", &params, None)
+        .await;
     mcp_to_http(resp)
 }
 
@@ -527,17 +558,22 @@ struct SessionRestoreParams {
     #[serde(default = "default_sr_limit")]
     limit: usize,
 }
-fn default_sr_limit() -> usize { 5 }
+fn default_sr_limit() -> usize {
+    5
+}
 
 async fn session_restore(
     State(state): State<AppState>,
     Query(params): Query<SessionRestoreParams>,
 ) -> impl IntoResponse {
-    let resp = state.tool_handler.handle(
-        "soma_session_restore",
-        &json!({"query": params.q, "limit": params.limit}),
-        None,
-    ).await;
+    let resp = state
+        .tool_handler
+        .handle(
+            "soma_session_restore",
+            &json!({"query": params.q, "limit": params.limit}),
+            None,
+        )
+        .await;
     mcp_to_http(resp)
 }
 
@@ -548,17 +584,22 @@ struct ExplainParams {
     #[serde(default = "default_max_paths")]
     max_paths: usize,
 }
-fn default_max_paths() -> usize { 3 }
+fn default_max_paths() -> usize {
+    3
+}
 
 async fn explain(
     State(state): State<AppState>,
     Query(params): Query<ExplainParams>,
 ) -> impl IntoResponse {
-    let resp = state.tool_handler.handle(
-        "soma_explain",
-        &json!({"from": params.from, "to": params.to, "max_paths": params.max_paths}),
-        None,
-    ).await;
+    let resp = state
+        .tool_handler
+        .handle(
+            "soma_explain",
+            &json!({"from": params.from, "to": params.to, "max_paths": params.max_paths}),
+            None,
+        )
+        .await;
     mcp_to_http(resp)
 }
 
@@ -574,14 +615,14 @@ async fn communities(
     State(state): State<AppState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
-    let min_size = params.get("min_size")
+    let min_size = params
+        .get("min_size")
         .and_then(|s| s.parse::<usize>().ok())
         .unwrap_or(3);
-    let resp = state.tool_handler.handle(
-        "soma_communities",
-        &json!({"min_size": min_size}),
-        None,
-    ).await;
+    let resp = state
+        .tool_handler
+        .handle("soma_communities", &json!({"min_size": min_size}), None)
+        .await;
     mcp_to_http(resp)
 }
 
@@ -651,13 +692,11 @@ async fn event_stream(
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let rx = state.event_tx.subscribe();
-    let stream = BroadcastStream::new(rx).filter_map(|result| {
-        match result {
-            Ok(event) => Some(Ok(Event::default()
-                .event(&event.kind)
-                .data(serde_json::to_string(&event).unwrap_or_default()))),
-            Err(_) => None,
-        }
+    let stream = BroadcastStream::new(rx).filter_map(|result| match result {
+        Ok(event) => Some(Ok(Event::default()
+            .event(&event.kind)
+            .data(serde_json::to_string(&event).unwrap_or_default()))),
+        Err(_) => None,
     });
 
     Sse::new(stream).keep_alive(
@@ -762,10 +801,7 @@ fn mcp_to_http(resp: soma_mcp::McpResponse) -> impl IntoResponse {
     if let Some(result) = resp.result {
         (StatusCode::OK, Json(result))
     } else if let Some(err) = resp.error {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": err.message})),
-        )
+        (StatusCode::BAD_REQUEST, Json(json!({"error": err.message})))
     } else {
         (
             StatusCode::INTERNAL_SERVER_ERROR,

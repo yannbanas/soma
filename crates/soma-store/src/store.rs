@@ -92,9 +92,7 @@ impl Store {
     }
 
     /// Read the latest snapshot, if it exists.
-    pub fn read_snapshot(
-        &self,
-    ) -> Result<Option<crate::snapshot::GraphSnapshot>, SomaError> {
+    pub fn read_snapshot(&self) -> Result<Option<crate::snapshot::GraphSnapshot>, SomaError> {
         let snap_path = self.workspace_dir.join("snapshot.soma");
         if !snap_path.exists() {
             return Ok(None);
@@ -179,10 +177,7 @@ mod tests {
 
     #[test]
     fn snapshot_roundtrip() {
-        let dir = std::env::temp_dir().join(format!(
-            "soma_store_snap_test_{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("soma_store_snap_test_{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
 
         let mut store = Store::open(&dir, "snap_test").unwrap();

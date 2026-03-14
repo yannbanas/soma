@@ -3,7 +3,9 @@ use std::sync::Arc;
 use chrono::Utc;
 use tokio::sync::RwLock;
 
-use soma_core::{Channel, NodeKind, Provenance, SomaError, SomaQuery, fuzzy_label_search, rrf_merge_with_sources};
+use soma_core::{
+    fuzzy_label_search, rrf_merge_with_sources, Channel, NodeKind, Provenance, SomaError, SomaQuery,
+};
 use soma_graph::StigreGraph;
 use soma_hdc::HdcEngine;
 use soma_ingest::{IngestPipeline, IngestSource};
@@ -144,18 +146,12 @@ impl ToolHandler {
             .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'query' parameter".into()))?;
 
-        let max_hops = params
-            .get("max_hops")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(3) as u8;
+        let max_hops = params.get("max_hops").and_then(|v| v.as_u64()).unwrap_or(3) as u8;
         let min_intensity = params
             .get("min_intensity")
             .and_then(|v| v.as_f64())
             .unwrap_or(0.15) as f32;
-        let limit = params
-            .get("limit")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(10) as usize;
+        let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
 
         let query = SomaQuery::new(query_str)
             .with_max_hops(max_hops)
@@ -214,14 +210,26 @@ impl ToolHandler {
         &self,
         params: &serde_json::Value,
     ) -> Result<serde_json::Value, SomaError> {
-        let from = params.get("from").and_then(|v| v.as_str())
+        let from = params
+            .get("from")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'from'".into()))?;
-        let to = params.get("to").and_then(|v| v.as_str())
+        let to = params
+            .get("to")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'to'".into()))?;
-        let channel_str = params.get("channel").and_then(|v| v.as_str())
+        let channel_str = params
+            .get("channel")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'channel'".into()))?;
-        let confidence = params.get("confidence").and_then(|v| v.as_f64()).unwrap_or(0.8) as f32;
-        let source = params.get("source").and_then(|v| v.as_str()).unwrap_or("mcp:relate");
+        let confidence = params
+            .get("confidence")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.8) as f32;
+        let source = params
+            .get("source")
+            .and_then(|v| v.as_str())
+            .unwrap_or("mcp:relate");
         let label = params.get("label").and_then(|v| v.as_str());
 
         let channel = Channel::from_str_name(channel_str)
@@ -241,18 +249,24 @@ impl ToolHandler {
         &self,
         params: &serde_json::Value,
     ) -> Result<serde_json::Value, SomaError> {
-        let from = params.get("from").and_then(|v| v.as_str())
+        let from = params
+            .get("from")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'from'".into()))?;
-        let to = params.get("to").and_then(|v| v.as_str())
+        let to = params
+            .get("to")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'to'".into()))?;
 
         let graph = self.graph.read().await;
-        let from_id = graph.node_id_by_label(from)
+        let from_id = graph
+            .node_id_by_label(from)
             .ok_or_else(|| SomaError::LabelNotFound(from.into()))?;
 
         // Find and reinforce all edges from → to
         let edges = graph.outgoing_edges(from_id);
-        let matching: Vec<_> = edges.iter()
+        let matching: Vec<_> = edges
+            .iter()
             .filter(|e| {
                 if let Some(to_node) = graph.get_node(e.to) {
                     to_node.label == to
@@ -274,15 +288,19 @@ impl ToolHandler {
         }))
     }
 
-    async fn soma_alarm(
-        &self,
-        params: &serde_json::Value,
-    ) -> Result<serde_json::Value, SomaError> {
-        let label = params.get("label").and_then(|v| v.as_str())
+    async fn soma_alarm(&self, params: &serde_json::Value) -> Result<serde_json::Value, SomaError> {
+        let label = params
+            .get("label")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'label'".into()))?;
-        let reason = params.get("reason").and_then(|v| v.as_str())
+        let reason = params
+            .get("reason")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'reason'".into()))?;
-        let source = params.get("source").and_then(|v| v.as_str()).unwrap_or("mcp:alarm");
+        let source = params
+            .get("source")
+            .and_then(|v| v.as_str())
+            .unwrap_or("mcp:alarm");
 
         let mut graph = self.graph.write().await;
         let entity_id = graph.upsert_node(label, NodeKind::Entity);
@@ -298,7 +316,9 @@ impl ToolHandler {
         &self,
         params: &serde_json::Value,
     ) -> Result<serde_json::Value, SomaError> {
-        let label = params.get("label").and_then(|v| v.as_str())
+        let label = params
+            .get("label")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'label'".into()))?;
 
         let mut graph = self.graph.write().await;
@@ -341,7 +361,9 @@ impl ToolHandler {
         &self,
         params: &serde_json::Value,
     ) -> Result<serde_json::Value, SomaError> {
-        let action = params.get("action").and_then(|v| v.as_str())
+        let action = params
+            .get("action")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'action'".into()))?;
 
         match action {
@@ -353,10 +375,17 @@ impl ToolHandler {
                 }))
             }
             "create" => {
-                let name = params.get("name").and_then(|v| v.as_str())
+                let name = params
+                    .get("name")
+                    .and_then(|v| v.as_str())
                     .ok_or_else(|| SomaError::Mcp("missing 'name' for create".into()))?;
                 // Creating a workspace just requires opening a store (creates the directory)
-                let data_dir = self.store.read().await.workspace_dir().parent()
+                let data_dir = self
+                    .store
+                    .read()
+                    .await
+                    .workspace_dir()
+                    .parent()
                     .map(|p| p.to_path_buf())
                     .ok_or_else(|| SomaError::Mcp("cannot determine data directory".into()))?;
                 let _ = Store::open(&data_dir, name)?;
@@ -372,7 +401,10 @@ impl ToolHandler {
                     "hint": "Use 'soma workspace list' to see available workspaces"
                 }))
             }
-            _ => Err(SomaError::Mcp(format!("unknown workspace action: {}", action))),
+            _ => Err(SomaError::Mcp(format!(
+                "unknown workspace action: {}",
+                action
+            ))),
         }
     }
 
@@ -380,10 +412,15 @@ impl ToolHandler {
         &self,
         params: &serde_json::Value,
     ) -> Result<serde_json::Value, SomaError> {
-        let query_str = params.get("query").and_then(|v| v.as_str())
+        let query_str = params
+            .get("query")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'query'".into()))?;
         // Token budget: ~4 chars per token
-        let max_tokens = params.get("max_tokens").and_then(|v| v.as_u64()).unwrap_or(2000) as usize;
+        let max_tokens = params
+            .get("max_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(2000) as usize;
         let max_chars = max_tokens * 4;
 
         let graph = self.graph.read().await;
@@ -409,10 +446,12 @@ impl ToolHandler {
         // Path 3: Fuzzy label search (full query + individual keywords)
         let mut fuzzy_list = fuzzy_label_search(query_str, &all_labels, 20);
         // Also search by individual significant words (>3 chars, skip stopwords)
-        let stopwords = ["les","des","une","est","sont","que","qui","pour","par","dans",
-            "avec","pas","sur","mais","the","and","for","you","this","that","not",
-            "fais","fait","quoi","comment","quel","quelle","ton","tes","mon","mes",
-            "dire","dit","dis","peut","veux","elle","nous","vous","ils","toi","moi"];
+        let stopwords = [
+            "les", "des", "une", "est", "sont", "que", "qui", "pour", "par", "dans", "avec", "pas",
+            "sur", "mais", "the", "and", "for", "you", "this", "that", "not", "fais", "fait",
+            "quoi", "comment", "quel", "quelle", "ton", "tes", "mon", "mes", "dire", "dit", "dis",
+            "peut", "veux", "elle", "nous", "vous", "ils", "toi", "moi",
+        ];
         for word in query_str.split(|c: char| !c.is_alphanumeric()) {
             if word.len() > 3 && !stopwords.contains(&word.to_lowercase().as_str()) {
                 let word_results = fuzzy_label_search(word, &all_labels, 10);
@@ -443,13 +482,10 @@ impl ToolHandler {
         ];
 
         // Collect top facts from hybrid results
-        let facts: Vec<_> = hybrid_results.iter()
+        let facts: Vec<_> = hybrid_results
+            .iter()
             .take(15)
-            .filter_map(|hr| {
-                graph.get_node_by_label(&hr.label).map(|node| {
-                    (node, hr)
-                })
-            })
+            .filter_map(|hr| graph.get_node_by_label(&hr.label).map(|node| (node, hr)))
             .collect();
 
         // --- Section 1: Relationships (edges with labels) ---
@@ -461,10 +497,11 @@ impl ToolHandler {
             // Outgoing edges
             let out_edges = graph.outgoing_edges(node.id);
             for edge in &out_edges {
-                if edge.effective_intensity(now_dt) < 0.1 { continue; }
+                if edge.effective_intensity(now_dt) < 0.1 {
+                    continue;
+                }
                 if let Some(target) = graph.get_node(edge.to) {
-                    let rel_label = edge.label.as_deref()
-                        .unwrap_or(edge.channel.as_str());
+                    let rel_label = edge.label.as_deref().unwrap_or(edge.channel.as_str());
                     let key = format!("{}->{}->{}", node.label, rel_label, target.label);
                     if seen_relations.insert(key) {
                         relation_lines.push(format!(
@@ -478,10 +515,11 @@ impl ToolHandler {
             // Incoming edges
             let in_edges = graph.incoming_edges(node.id);
             for edge in &in_edges {
-                if edge.effective_intensity(now_dt) < 0.1 { continue; }
+                if edge.effective_intensity(now_dt) < 0.1 {
+                    continue;
+                }
                 if let Some(source_node) = graph.get_node(edge.from) {
-                    let rel_label = edge.label.as_deref()
-                        .unwrap_or(edge.channel.as_str());
+                    let rel_label = edge.label.as_deref().unwrap_or(edge.channel.as_str());
                     let key = format!("{}->{}->{}", source_node.label, rel_label, node.label);
                     if seen_relations.insert(key) {
                         relation_lines.push(format!(
@@ -511,7 +549,8 @@ impl ToolHandler {
         }
 
         // --- Section 3: Alarms ---
-        let alarms: Vec<_> = graph.all_nodes()
+        let alarms: Vec<_> = graph
+            .all_nodes()
             .filter(|n| n.kind == NodeKind::Warning)
             .collect();
 
@@ -546,7 +585,10 @@ impl ToolHandler {
         }))
     }
 
-    async fn soma_cypher(&self, params: &serde_json::Value) -> Result<serde_json::Value, SomaError> {
+    async fn soma_cypher(
+        &self,
+        params: &serde_json::Value,
+    ) -> Result<serde_json::Value, SomaError> {
         let query = params
             .get("query")
             .and_then(|v| v.as_str())
@@ -560,19 +602,35 @@ impl ToolHandler {
     }
 
     /// B.1 — Correct an edge's confidence (AI feedback loop).
-    async fn soma_correct(&self, params: &serde_json::Value) -> Result<serde_json::Value, SomaError> {
-        let from = params.get("from").and_then(|v| v.as_str())
+    async fn soma_correct(
+        &self,
+        params: &serde_json::Value,
+    ) -> Result<serde_json::Value, SomaError> {
+        let from = params
+            .get("from")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'from'".into()))?;
-        let to = params.get("to").and_then(|v| v.as_str())
+        let to = params
+            .get("to")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'to'".into()))?;
-        let new_confidence = params.get("new_confidence").and_then(|v| v.as_f64())
-            .ok_or_else(|| SomaError::Mcp("missing 'new_confidence'".into()))? as f32;
-        let reason = params.get("reason").and_then(|v| v.as_str()).unwrap_or("correction");
+        let new_confidence = params
+            .get("new_confidence")
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| SomaError::Mcp("missing 'new_confidence'".into()))?
+            as f32;
+        let reason = params
+            .get("reason")
+            .and_then(|v| v.as_str())
+            .unwrap_or("correction");
 
         let mut graph = self.graph.write().await;
         let edges = graph.find_edges_by_labels(from, to);
         if edges.is_empty() {
-            return Err(SomaError::Mcp(format!("no edge from '{}' to '{}'", from, to)));
+            return Err(SomaError::Mcp(format!(
+                "no edge from '{}' to '{}'",
+                from, to
+            )));
         }
 
         let mut corrected = 0;
@@ -607,17 +665,30 @@ impl ToolHandler {
     }
 
     /// B.2 — Validate an edge (positive AI feedback).
-    async fn soma_validate(&self, params: &serde_json::Value) -> Result<serde_json::Value, SomaError> {
-        let from = params.get("from").and_then(|v| v.as_str())
+    async fn soma_validate(
+        &self,
+        params: &serde_json::Value,
+    ) -> Result<serde_json::Value, SomaError> {
+        let from = params
+            .get("from")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'from'".into()))?;
-        let to = params.get("to").and_then(|v| v.as_str())
+        let to = params
+            .get("to")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'to'".into()))?;
-        let source = params.get("source").and_then(|v| v.as_str()).unwrap_or("mcp:validate");
+        let source = params
+            .get("source")
+            .and_then(|v| v.as_str())
+            .unwrap_or("mcp:validate");
 
         let mut graph = self.graph.write().await;
         let edges = graph.find_edges_by_labels(from, to);
         if edges.is_empty() {
-            return Err(SomaError::Mcp(format!("no edge from '{}' to '{}'", from, to)));
+            return Err(SomaError::Mcp(format!(
+                "no edge from '{}' to '{}'",
+                from, to
+            )));
         }
 
         let mut validated = 0;
@@ -634,18 +705,35 @@ impl ToolHandler {
     }
 
     /// A.1 — Compact a session summary into the graph before context compaction.
-    async fn soma_compact(&self, params: &serde_json::Value) -> Result<serde_json::Value, SomaError> {
-        let summary = params.get("summary").and_then(|v| v.as_str())
+    async fn soma_compact(
+        &self,
+        params: &serde_json::Value,
+    ) -> Result<serde_json::Value, SomaError> {
+        let summary = params
+            .get("summary")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'summary'".into()))?;
-        let session_id = params.get("session_id").and_then(|v| v.as_str())
+        let session_id = params
+            .get("session_id")
+            .and_then(|v| v.as_str())
             .unwrap_or("unknown");
-        let entities: Vec<String> = params.get("entities")
+        let entities: Vec<String> = params
+            .get("entities")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
-        let decisions: Vec<String> = params.get("decisions")
+        let decisions: Vec<String> = params
+            .get("decisions")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
 
         let mut graph = self.graph.write().await;
@@ -662,7 +750,10 @@ impl ToolHandler {
         let mut edges_created = 0;
         for entity in &entities {
             let entity_id = graph.upsert_node(entity, NodeKind::Entity);
-            if graph.upsert_edge(summary_id, entity_id, Channel::Trail, 0.7, "mcp:compact").is_some() {
+            if graph
+                .upsert_edge(summary_id, entity_id, Channel::Trail, 0.7, "mcp:compact")
+                .is_some()
+            {
                 edges_created += 1;
             }
         }
@@ -670,7 +761,10 @@ impl ToolHandler {
         // Decisions become Concept nodes linked via Causal
         for decision in &decisions {
             let decision_id = graph.upsert_node(decision, NodeKind::Concept);
-            if graph.upsert_edge(summary_id, decision_id, Channel::Causal, 0.8, "mcp:compact").is_some() {
+            if graph
+                .upsert_edge(summary_id, decision_id, Channel::Causal, 0.8, "mcp:compact")
+                .is_some()
+            {
                 edges_created += 1;
             }
         }
@@ -684,7 +778,9 @@ impl ToolHandler {
         let mut s = self.store.write().await;
         let _ = s.write_wal(&soma_store::WalEntry::Custom(format!(
             "SessionCompact: {} entities={} decisions={}",
-            session_id, entities.len(), decisions.len()
+            session_id,
+            entities.len(),
+            decisions.len()
         )));
 
         Ok(serde_json::json!({
@@ -697,15 +793,21 @@ impl ToolHandler {
     }
 
     /// A.3 — Restore previous session context.
-    async fn soma_session_restore(&self, params: &serde_json::Value) -> Result<serde_json::Value, SomaError> {
-        let query_str = params.get("query").and_then(|v| v.as_str())
+    async fn soma_session_restore(
+        &self,
+        params: &serde_json::Value,
+    ) -> Result<serde_json::Value, SomaError> {
+        let query_str = params
+            .get("query")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'query'".into()))?;
         let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
 
         let graph = self.graph.read().await;
 
         // Find session summary nodes
-        let session_nodes: Vec<_> = graph.all_nodes()
+        let session_nodes: Vec<_> = graph
+            .all_nodes()
             .filter(|n| n.tags.contains(&"session_summary".to_string()))
             .collect();
 
@@ -723,23 +825,24 @@ impl ToolHandler {
         drop(h);
 
         // RRF merge
-        let ranked_lists: Vec<(&str, Vec<(String, f32)>)> = vec![
-            ("fuzzy", matches),
-            ("hdc", hdc_matches),
-        ];
+        let ranked_lists: Vec<(&str, Vec<(String, f32)>)> =
+            vec![("fuzzy", matches), ("hdc", hdc_matches)];
         let hybrid = rrf_merge_with_sources(&ranked_lists, 60.0);
 
-        let sessions: Vec<serde_json::Value> = hybrid.iter()
+        let sessions: Vec<serde_json::Value> = hybrid
+            .iter()
             .take(limit)
             .filter_map(|hr| {
                 graph.get_node_by_label(&hr.label).map(|node| {
                     // Get linked entities and decisions
                     let edges = graph.outgoing_edges(node.id);
-                    let entities: Vec<String> = edges.iter()
+                    let entities: Vec<String> = edges
+                        .iter()
                         .filter(|e| e.channel == Channel::Trail)
                         .filter_map(|e| graph.get_node(e.to).map(|n| n.label.clone()))
                         .collect();
-                    let decisions: Vec<String> = edges.iter()
+                    let decisions: Vec<String> = edges
+                        .iter()
                         .filter(|e| e.channel == Channel::Causal)
                         .filter_map(|e| graph.get_node(e.to).map(|n| n.label.clone()))
                         .collect();
@@ -761,12 +864,22 @@ impl ToolHandler {
     }
 
     /// E.2 — Explain paths between two entities.
-    async fn soma_explain(&self, params: &serde_json::Value) -> Result<serde_json::Value, SomaError> {
-        let from = params.get("from").and_then(|v| v.as_str())
+    async fn soma_explain(
+        &self,
+        params: &serde_json::Value,
+    ) -> Result<serde_json::Value, SomaError> {
+        let from = params
+            .get("from")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'from'".into()))?;
-        let to = params.get("to").and_then(|v| v.as_str())
+        let to = params
+            .get("to")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'to'".into()))?;
-        let max_paths = params.get("max_paths").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
+        let max_paths = params
+            .get("max_paths")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(3) as usize;
 
         let graph = self.graph.read().await;
 
@@ -777,16 +890,27 @@ impl ToolHandler {
             .with_limit(100);
         let results = graph.traverse(&query);
 
-        let paths: Vec<serde_json::Value> = results.iter()
+        let paths: Vec<serde_json::Value> = results
+            .iter()
             .filter(|r| r.node.label.to_lowercase() == to.to_lowercase())
             .take(max_paths)
             .map(|r| {
-                let path_str: Vec<String> = r.path.iter().map(|e| {
-                    let from_node = graph.get_node(e.from).map(|n| n.label.as_str()).unwrap_or("?");
-                    let to_node = graph.get_node(e.to).map(|n| n.label.as_str()).unwrap_or("?");
-                    let label = e.label.as_deref().unwrap_or(e.channel.as_str());
-                    format!("{} --[{}]--> {}", from_node, label, to_node)
-                }).collect();
+                let path_str: Vec<String> = r
+                    .path
+                    .iter()
+                    .map(|e| {
+                        let from_node = graph
+                            .get_node(e.from)
+                            .map(|n| n.label.as_str())
+                            .unwrap_or("?");
+                        let to_node = graph
+                            .get_node(e.to)
+                            .map(|n| n.label.as_str())
+                            .unwrap_or("?");
+                        let label = e.label.as_deref().unwrap_or(e.channel.as_str());
+                        format!("{} --[{}]--> {}", from_node, label, to_node)
+                    })
+                    .collect();
                 serde_json::json!({
                     "path": path_str,
                     "score": r.score,
@@ -811,11 +935,18 @@ impl ToolHandler {
 
     /// E.3 — Merge duplicate nodes.
     async fn soma_merge(&self, params: &serde_json::Value) -> Result<serde_json::Value, SomaError> {
-        let keep = params.get("keep").and_then(|v| v.as_str())
+        let keep = params
+            .get("keep")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'keep'".into()))?;
-        let absorb = params.get("absorb").and_then(|v| v.as_str())
+        let absorb = params
+            .get("absorb")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'absorb'".into()))?;
-        let reason = params.get("reason").and_then(|v| v.as_str()).unwrap_or("merge");
+        let reason = params
+            .get("reason")
+            .and_then(|v| v.as_str())
+            .unwrap_or("merge");
 
         let mut graph = self.graph.write().await;
         match graph.merge_nodes(keep, absorb) {
@@ -833,18 +964,26 @@ impl ToolHandler {
                     "reason": reason,
                 }))
             }
-            None => Err(SomaError::Mcp(format!("node '{}' or '{}' not found", keep, absorb))),
+            None => Err(SomaError::Mcp(format!(
+                "node '{}' or '{}' not found",
+                keep, absorb
+            ))),
         }
     }
 
     /// C.2 — Community detection via Louvain.
-    async fn soma_communities(&self, params: &serde_json::Value) -> Result<serde_json::Value, SomaError> {
+    async fn soma_communities(
+        &self,
+        params: &serde_json::Value,
+    ) -> Result<serde_json::Value, SomaError> {
         let min_size = params.get("min_size").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
 
         let graph = self.graph.read().await;
         let result = soma_graph::detect_communities(graph.inner(), min_size);
 
-        let communities: Vec<serde_json::Value> = result.communities.iter()
+        let communities: Vec<serde_json::Value> = result
+            .communities
+            .iter()
             .map(|(id, members)| {
                 serde_json::json!({
                     "id": id,
@@ -863,32 +1002,46 @@ impl ToolHandler {
 
     /// F.2 — Record a reasoning step (Graph of Thoughts).
     async fn soma_think(&self, params: &serde_json::Value) -> Result<serde_json::Value, SomaError> {
-        let thought = params.get("thought").and_then(|v| v.as_str())
+        let thought = params
+            .get("thought")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| SomaError::Mcp("missing 'thought'".into()))?;
-        let depends_on: Vec<String> = params.get("depends_on")
+        let depends_on: Vec<String> = params
+            .get("depends_on")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
-        let is_conclusion = params.get("conclusion").and_then(|v| v.as_bool()).unwrap_or(false);
+        let is_conclusion = params
+            .get("conclusion")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
         let mut graph = self.graph.write().await;
 
         // Create thought node
-        let thought_id = graph.upsert_node_with_tags(
-            thought,
-            NodeKind::Concept,
-            vec!["thought".to_string()],
-        );
+        let thought_id =
+            graph.upsert_node_with_tags(thought, NodeKind::Concept, vec!["thought".to_string()]);
 
         let mut edges_created = 0;
 
         // Link to dependencies via Reasoning channel (fast decay)
         // If conclusion, use Causal (more durable)
-        let channel = if is_conclusion { Channel::Causal } else { Channel::Reasoning };
+        let channel = if is_conclusion {
+            Channel::Causal
+        } else {
+            Channel::Reasoning
+        };
 
         for dep in &depends_on {
             let dep_id = graph.upsert_node(dep, NodeKind::Concept);
-            if graph.upsert_edge(dep_id, thought_id, channel, 0.8, "mcp:think").is_some() {
+            if graph
+                .upsert_edge(dep_id, thought_id, channel, 0.8, "mcp:think")
+                .is_some()
+            {
                 edges_created += 1;
             }
         }

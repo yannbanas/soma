@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use tokio::sync::{RwLock, broadcast};
+use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, warn};
 
 use crate::{GraphEvent, WebhookRegistration};
@@ -46,12 +46,7 @@ pub fn spawn_dispatcher(
     });
 }
 
-async fn deliver(
-    client: &reqwest::Client,
-    url: &str,
-    event: &GraphEvent,
-    secret: Option<&str>,
-) {
+async fn deliver(client: &reqwest::Client, url: &str, event: &GraphEvent, secret: Option<&str>) {
     let mut req = client.post(url).json(event);
     if let Some(s) = secret {
         req = req.header("X-Soma-Secret", s);

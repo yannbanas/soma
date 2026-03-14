@@ -102,7 +102,7 @@ impl CypherExecutor {
                 query
                     .where_clause
                     .as_ref()
-                    .map_or(true, |w| Self::eval_where(w, binding, graph, now))
+                    .is_none_or(|w| Self::eval_where(w, binding, graph, now))
             })
             .collect();
 
@@ -242,14 +242,21 @@ impl CypherExecutor {
             }
 
             // Walk the pattern chain
-            let chain_results =
-                Self::walk_pattern_chain(graph, start, &node_patterns[1..], &rel_patterns, &binding, now);
+            let chain_results = Self::walk_pattern_chain(
+                graph,
+                start,
+                &node_patterns[1..],
+                &rel_patterns,
+                &binding,
+                now,
+            );
             results.extend(chain_results);
         }
 
         Ok(results)
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn walk_pattern_chain(
         graph: &StigreGraph,
         current_node: &SomaNode,
@@ -317,12 +324,7 @@ impl CypherExecutor {
                 if let Some(edge) = qr.path.last() {
                     new_binding.insert(
                         var.clone(),
-                        format!(
-                            "{}:{}->{}",
-                            edge.channel,
-                            current_node.label,
-                            qr.node.label
-                        ),
+                        format!("{}:{}->{}", edge.channel, current_node.label, qr.node.label),
                     );
                 }
             }
@@ -415,12 +417,10 @@ impl CypherExecutor {
     ) -> bool {
         match expr {
             WhereExpr::And(a, b) => {
-                Self::eval_where(a, binding, graph, now)
-                    && Self::eval_where(b, binding, graph, now)
+                Self::eval_where(a, binding, graph, now) && Self::eval_where(b, binding, graph, now)
             }
             WhereExpr::Or(a, b) => {
-                Self::eval_where(a, binding, graph, now)
-                    || Self::eval_where(b, binding, graph, now)
+                Self::eval_where(a, binding, graph, now) || Self::eval_where(b, binding, graph, now)
             }
             WhereExpr::Not(e) => !Self::eval_where(e, binding, graph, now),
             WhereExpr::Contains(prop, s) => {
@@ -468,10 +468,7 @@ impl CypherExecutor {
             }
             "confidence" => {
                 let edges = graph.outgoing_edges(node.id);
-                let max_conf = edges
-                    .iter()
-                    .map(|e| e.confidence)
-                    .fold(0.0_f32, f32::max);
+                let max_conf = edges.iter().map(|e| e.confidence).fold(0.0_f32, f32::max);
                 CypherValue::Float(max_conf as f64)
             }
             "uses" => {
@@ -577,12 +574,17 @@ impl CypherExecutor {
 
     // --- CREATE ---
 
-    fn execute_create(graph: &mut StigreGraph, create: &CreateClause) -> Result<CypherResult, String> {
+    fn execute_create(
+        graph: &mut StigreGraph,
+        create: &CreateClause,
+    ) -> Result<CypherResult, String> {
         // Resolve source nodes from MATCH clause
         let bindings = if let Some(ref match_clause) = create.match_clause {
             let b = Self::match_patterns(graph, match_clause)?;
             if b.is_empty() {
-                return Ok(CypherResult::empty_with_message("No matching nodes found for CREATE"));
+                return Ok(CypherResult::empty_with_message(
+                    "No matching nodes found for CREATE",
+                ));
             }
             b
         } else {
@@ -595,12 +597,13 @@ impl CypherExecutor {
             let from_label = binding.get(&create.from_var).ok_or_else(|| {
                 format!("Variable '{}' not bound in MATCH clause", create.from_var)
             })?;
-            let to_label = binding.get(&create.to_var).ok_or_else(|| {
-                format!("Variable '{}' not bound in MATCH clause", create.to_var)
-            })?;
+            let to_label = binding
+                .get(&create.to_var)
+                .ok_or_else(|| format!("Variable '{}' not bound in MATCH clause", create.to_var))?;
 
-            let channel = Channel::from_str_name(&create.rel_type)
-                .ok_or_else(|| format!("Unknown channel/relationship type: '{}'", create.rel_type))?;
+            let channel = Channel::from_str_name(&create.rel_type).ok_or_else(|| {
+                format!("Unknown channel/relationship type: '{}'", create.rel_type)
+            })?;
 
             let confidence = create
                 .properties
@@ -621,13 +624,10 @@ impl CypherExecutor {
                 })
                 .unwrap_or("cypher");
 
-            let edge_label = create
-                .properties
-                .get("label")
-                .and_then(|v| match v {
-                    PropValue::String(s) => Some(s.as_str()),
-                    _ => None,
-                });
+            let edge_label = create.properties.get("label").and_then(|v| match v {
+                PropValue::String(s) => Some(s.as_str()),
+                _ => None,
+            });
 
             let from_id = graph
                 .node_id_by_label(from_label)
@@ -648,7 +648,10 @@ impl CypherExecutor {
 
     // --- DELETE ---
 
-    fn execute_delete(graph: &mut StigreGraph, delete: &DeleteClause) -> Result<CypherResult, String> {
+    fn execute_delete(
+        graph: &mut StigreGraph,
+        delete: &DeleteClause,
+    ) -> Result<CypherResult, String> {
         let bindings = Self::match_patterns(graph, &delete.match_clause)?;
 
         let now = Utc::now();
@@ -658,7 +661,7 @@ impl CypherExecutor {
                 delete
                     .where_clause
                     .as_ref()
-                    .map_or(true, |w| Self::eval_where(w, b, graph, now))
+                    .is_none_or(|w| Self::eval_where(w, b, graph, now))
             })
             .collect();
 
@@ -705,7 +708,7 @@ fn prop_matches_json(prop: &PropValue, json: &serde_json::Value) -> bool {
         (PropValue::String(s), serde_json::Value::String(j)) => s == j,
         (PropValue::Int(i), serde_json::Value::Number(n)) => n.as_i64() == Some(*i),
         (PropValue::Float(f), serde_json::Value::Number(n)) => {
-            n.as_f64().map_or(false, |nf| (nf - f).abs() < f64::EPSILON)
+            n.as_f64().is_some_and(|nf| (nf - f).abs() < f64::EPSILON)
         }
         (PropValue::Bool(b), serde_json::Value::Bool(j)) => b == j,
         _ => false,
@@ -734,7 +737,9 @@ fn compare_cypher_values(a: &CypherValue, b: &CypherValue) -> std::cmp::Ordering
     match (a, b) {
         (CypherValue::String(a), CypherValue::String(b)) => a.cmp(b),
         (CypherValue::Int(a), CypherValue::Int(b)) => a.cmp(b),
-        (CypherValue::Float(a), CypherValue::Float(b)) => a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
+        (CypherValue::Float(a), CypherValue::Float(b)) => {
+            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+        }
         (CypherValue::Null, _) => std::cmp::Ordering::Greater,
         (_, CypherValue::Null) => std::cmp::Ordering::Less,
         _ => std::cmp::Ordering::Equal,
@@ -818,11 +823,7 @@ mod tests {
     #[test]
     fn test_limit() {
         let mut g = setup_graph();
-        let result = CypherExecutor::execute(
-            &mut g,
-            "MATCH (n) RETURN n.label LIMIT 2",
-        )
-        .unwrap();
+        let result = CypherExecutor::execute(&mut g, "MATCH (n) RETURN n.label LIMIT 2").unwrap();
         assert!(result.rows.len() <= 2);
     }
 
@@ -841,11 +842,8 @@ mod tests {
     fn test_delete_node() {
         let mut g = setup_graph();
         assert!(g.get_node_by_label("SOMA").is_some());
-        let result = CypherExecutor::execute(
-            &mut g,
-            r#"MATCH (n {label: "SOMA"}) DELETE n"#,
-        )
-        .unwrap();
+        let result =
+            CypherExecutor::execute(&mut g, r#"MATCH (n {label: "SOMA"}) DELETE n"#).unwrap();
         assert!(result.message.unwrap().contains("Deleted 1"));
         assert!(g.get_node_by_label("SOMA").is_none());
     }

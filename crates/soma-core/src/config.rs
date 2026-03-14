@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Global SOMA configuration, parsed from soma.toml.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SomaConfig {
     #[serde(default)]
     pub soma: SomaSection,
@@ -93,36 +93,59 @@ fn default_data_dir() -> String {
     }
     "~/.local/share/soma".to_string()
 }
-fn default_workspace() -> String { "default".to_string() }
-fn default_log_level() -> String { "info".to_string() }
-fn default_prune_threshold() -> f32 { 0.05 }
-fn default_physarum_interval() -> f64 { 2.0 }
-fn default_consolidation_interval() -> f64 { 6.0 }
-fn default_pruning_interval() -> f64 { 24.0 }
-fn default_snapshot_interval() -> f64 { 6.0 }
-fn default_dimension() -> usize { 10_000 }
-fn default_window_size() -> usize { 5 }
-fn default_true() -> bool { true }
-fn default_chunk_size() -> usize { 5 }
-fn default_chunk_overlap() -> usize { 1 }
-fn default_provider() -> String { "ollama".to_string() }
-fn default_model() -> String { "cogito:8b".to_string() }
-fn default_timeout_ms() -> u64 { 30_000 }
-fn default_endpoint() -> String { "http://localhost:11434".to_string() }
-fn default_transport() -> String { "stdio".to_string() }
-fn default_tcp_port() -> u16 { 3333 }
-
-impl Default for SomaConfig {
-    fn default() -> Self {
-        SomaConfig {
-            soma: SomaSection::default(),
-            bio: BioSection::default(),
-            hdc: HdcSection::default(),
-            ingest: IngestSection::default(),
-            llm: LlmSection::default(),
-            mcp: McpSection::default(),
-        }
-    }
+fn default_workspace() -> String {
+    "default".to_string()
+}
+fn default_log_level() -> String {
+    "info".to_string()
+}
+fn default_prune_threshold() -> f32 {
+    0.05
+}
+fn default_physarum_interval() -> f64 {
+    2.0
+}
+fn default_consolidation_interval() -> f64 {
+    6.0
+}
+fn default_pruning_interval() -> f64 {
+    24.0
+}
+fn default_snapshot_interval() -> f64 {
+    6.0
+}
+fn default_dimension() -> usize {
+    10_000
+}
+fn default_window_size() -> usize {
+    5
+}
+fn default_true() -> bool {
+    true
+}
+fn default_chunk_size() -> usize {
+    5
+}
+fn default_chunk_overlap() -> usize {
+    1
+}
+fn default_provider() -> String {
+    "ollama".to_string()
+}
+fn default_model() -> String {
+    "cogito:8b".to_string()
+}
+fn default_timeout_ms() -> u64 {
+    30_000
+}
+fn default_endpoint() -> String {
+    "http://localhost:11434".to_string()
+}
+fn default_transport() -> String {
+    "stdio".to_string()
+}
+fn default_tcp_port() -> u16 {
+    3333
 }
 
 impl Default for SomaSection {
@@ -239,7 +262,9 @@ impl SomaConfig {
 fn dirs_home() -> Option<std::path::PathBuf> {
     #[cfg(target_os = "windows")]
     {
-        std::env::var("USERPROFILE").ok().map(std::path::PathBuf::from)
+        std::env::var("USERPROFILE")
+            .ok()
+            .map(std::path::PathBuf::from)
     }
     #[cfg(not(target_os = "windows"))]
     {

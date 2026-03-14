@@ -95,14 +95,22 @@ impl IngestPipeline {
 
             for triplet in &triplets {
                 // Determine node kinds from channel context
-                let (subj_kind, obj_kind) = infer_node_kinds(&triplet);
+                let (subj_kind, obj_kind) = infer_node_kinds(triplet);
 
                 // Upsert nodes
                 let subj_id = graph.upsert_node(&triplet.subject, subj_kind);
                 let obj_id = graph.upsert_node(&triplet.object, obj_kind);
                 total_nodes += 2;
-                created_nodes.push(soma_core::SomaNode::new(&workspace, &triplet.subject, subj_kind));
-                created_nodes.push(soma_core::SomaNode::new(&workspace, &triplet.object, obj_kind));
+                created_nodes.push(soma_core::SomaNode::new(
+                    &workspace,
+                    &triplet.subject,
+                    subj_kind,
+                ));
+                created_nodes.push(soma_core::SomaNode::new(
+                    &workspace,
+                    &triplet.object,
+                    obj_kind,
+                ));
 
                 // Upsert edge
                 if let Some(_edge_id) = graph.upsert_edge(
@@ -114,7 +122,11 @@ impl IngestPipeline {
                 ) {
                     total_edges += 1;
                     created_edges.push(soma_core::StigreEdge::new(
-                        subj_id, obj_id, triplet.channel, 0.7, source_tag.to_string(),
+                        subj_id,
+                        obj_id,
+                        triplet.channel,
+                        0.7,
+                        source_tag.to_string(),
                     ));
                 }
             }
@@ -141,13 +153,16 @@ impl IngestPipeline {
                 for (i, j) in (0..entity_ids.len())
                     .flat_map(|i| ((i + 1)..entity_ids.len()).map(move |j| (i, j)))
                 {
-                    if let Some(_) = graph.upsert_edge(
-                        entity_ids[i],
-                        entity_ids[j],
-                        Channel::Trail,
-                        0.5, // co-occurrence confidence
-                        source_tag,
-                    ) {
+                    if graph
+                        .upsert_edge(
+                            entity_ids[i],
+                            entity_ids[j],
+                            Channel::Trail,
+                            0.5, // co-occurrence confidence
+                            source_tag,
+                        )
+                        .is_some()
+                    {
                         total_edges += 1;
                         created_edges.push(soma_core::StigreEdge::new(
                             entity_ids[i],
@@ -180,26 +195,31 @@ impl IngestPipeline {
                             );
                             for lt in &llm_triplets {
                                 let channel = channel_from_relation(&lt.relation);
-                                let (subj_kind, obj_kind) =
-                                    infer_node_kinds_from_channel(channel);
+                                let (subj_kind, obj_kind) = infer_node_kinds_from_channel(channel);
 
                                 let subj_id = graph.upsert_node(&lt.subject, subj_kind);
                                 let obj_id = graph.upsert_node(&lt.object, obj_kind);
                                 total_nodes += 2;
-                                created_nodes.push(soma_core::SomaNode::new(&workspace, &lt.subject, subj_kind));
-                                created_nodes.push(soma_core::SomaNode::new(&workspace, &lt.object, obj_kind));
+                                created_nodes.push(soma_core::SomaNode::new(
+                                    &workspace,
+                                    &lt.subject,
+                                    subj_kind,
+                                ));
+                                created_nodes.push(soma_core::SomaNode::new(
+                                    &workspace, &lt.object, obj_kind,
+                                ));
 
                                 let confidence = lt.confidence.clamp(0.0, 1.0);
-                                if let Some(_edge_id) = graph.upsert_edge(
-                                    subj_id,
-                                    obj_id,
-                                    channel,
-                                    confidence,
-                                    source_tag,
-                                ) {
+                                if let Some(_edge_id) = graph
+                                    .upsert_edge(subj_id, obj_id, channel, confidence, source_tag)
+                                {
                                     total_edges += 1;
                                     created_edges.push(soma_core::StigreEdge::new(
-                                        subj_id, obj_id, channel, confidence, source_tag.to_string(),
+                                        subj_id,
+                                        obj_id,
+                                        channel,
+                                        confidence,
+                                        source_tag.to_string(),
                                     ));
                                 }
                                 total_triplets += 1;
@@ -239,7 +259,11 @@ impl IngestPipeline {
 }
 
 /// Create an Event node for a chunk that couldn't be extracted into triplets.
-fn create_event_node(graph: &mut StigreGraph, chunk: &str, source_tag: &str) -> soma_core::SomaNode {
+fn create_event_node(
+    graph: &mut StigreGraph,
+    chunk: &str,
+    source_tag: &str,
+) -> soma_core::SomaNode {
     let label = if chunk.len() > 80 {
         // Find a char boundary at or before byte 77
         let end = chunk
@@ -357,8 +381,14 @@ mod tests {
         let source = IngestSource::RawText("Rust is a systems programming language.".to_string());
 
         let result = pipeline.ingest(&source, &mut graph, "test").unwrap();
-        assert_eq!(result.chunks_processed, 1, "Single sentence should be 1 chunk");
-        assert!(result.triplets_extracted >= 1, "Should extract 'is a' triplet");
+        assert_eq!(
+            result.chunks_processed, 1,
+            "Single sentence should be 1 chunk"
+        );
+        assert!(
+            result.triplets_extracted >= 1,
+            "Should extract 'is a' triplet"
+        );
         assert!(graph.node_count() >= 1, "Graph should have at least 1 node");
     }
 
@@ -378,12 +408,21 @@ mod tests {
 
     #[test]
     fn channel_from_relation_mapping() {
-        assert!(matches!(channel_from_relation("derives from"), Channel::DerivesDe));
-        assert!(matches!(channel_from_relation("is based on"), Channel::DerivesDe));
+        assert!(matches!(
+            channel_from_relation("derives from"),
+            Channel::DerivesDe
+        ));
+        assert!(matches!(
+            channel_from_relation("is based on"),
+            Channel::DerivesDe
+        ));
         assert!(matches!(channel_from_relation("causes"), Channel::Causal));
         assert!(matches!(channel_from_relation("triggers"), Channel::Causal));
         assert!(matches!(channel_from_relation("AVOID"), Channel::Alarm));
-        assert!(matches!(channel_from_relation("is incompatible with"), Channel::Alarm));
+        assert!(matches!(
+            channel_from_relation("is incompatible with"),
+            Channel::Alarm
+        ));
         assert!(matches!(channel_from_relation("is a"), Channel::Trail));
         assert!(matches!(channel_from_relation("uses"), Channel::Trail));
     }

@@ -6,9 +6,11 @@ use colored::Colorize;
 use tokio::sync::RwLock;
 use tracing_subscriber::EnvFilter;
 
-use soma_bio::{BioConfig, BioScheduler};
 use chrono::Utc;
-use soma_core::{Channel, NodeKind, SomaConfig, SomaQuery, fuzzy_label_search, rrf_merge_with_sources};
+use soma_bio::{BioConfig, BioScheduler};
+use soma_core::{
+    fuzzy_label_search, rrf_merge_with_sources, Channel, NodeKind, SomaConfig, SomaQuery,
+};
 use soma_graph::StigreGraph;
 use soma_hdc::HdcEngine;
 use soma_ingest::{IngestPipeline, IngestSource};
@@ -222,7 +224,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load and validate config
     let config = load_config(cli.config.as_deref())?;
-    config.validate().map_err(|e| format!("invalid config: {}", e))?;
+    config
+        .validate()
+        .map_err(|e| format!("invalid config: {}", e))?;
     let data_dir = config.resolved_data_dir();
 
     // Open store
@@ -269,10 +273,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             engine
         } else {
-            HdcEngine::new(config.hdc.dimension, config.hdc.window_size, config.hdc.tfidf)
+            HdcEngine::new(
+                config.hdc.dimension,
+                config.hdc.window_size,
+                config.hdc.tfidf,
+            )
         }
     } else {
-        HdcEngine::new(config.hdc.dimension, config.hdc.window_size, config.hdc.tfidf)
+        HdcEngine::new(
+            config.hdc.dimension,
+            config.hdc.window_size,
+            config.hdc.tfidf,
+        )
     };
 
     // Auto-train HDC on any graph labels not in vocab (covers WAL replay gap)
@@ -282,7 +294,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         hdc.train(&all_graph_labels);
         let new_tokens = hdc.vocab_size() - vocab_before;
         if new_tokens > 0 {
-            eprintln!("{} HDC trained {} new tokens from graph labels", "✓".green(), new_tokens);
+            eprintln!(
+                "{} HDC trained {} new tokens from graph labels",
+                "✓".green(),
+                new_tokens
+            );
         }
     }
 
@@ -323,7 +339,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             channel,
             source,
         } => {
-            cmd_add(&graph, &hdc, &store, &content, tags, &channel, &source, &llm_client).await?;
+            cmd_add(
+                &graph,
+                &hdc,
+                &store,
+                &content,
+                tags,
+                &channel,
+                &source,
+                &llm_client,
+            )
+            .await?;
             maybe_snapshot(&graph, &hdc, &store).await?;
         }
         Commands::Ingest { file, chunk: _ } => {
@@ -337,7 +363,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             max_hops,
             no_semantic,
         } => {
-            cmd_search(&graph, &hdc, &query, limit, channel, max_hops, no_semantic, json_mode).await?;
+            cmd_search(
+                &graph,
+                &hdc,
+                &query,
+                limit,
+                channel,
+                max_hops,
+                no_semantic,
+                json_mode,
+            )
+            .await?;
         }
         Commands::Relate {
             from,
@@ -373,7 +409,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
             if json_mode {
-                println!("{}", serde_json::to_string_pretty(&report).unwrap_or_default());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).unwrap_or_default()
+                );
             }
         }
         Commands::Embed { incremental } => {
@@ -421,8 +460,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             server.run_tcp(port).await?;
         }
-        Commands::Watch { path, recursive, interval } => {
-            eprintln!("{} Watching {} (recursive={})", "◉".yellow(), path.display(), recursive);
+        Commands::Watch {
+            path,
+            recursive,
+            interval,
+        } => {
+            eprintln!(
+                "{} Watching {} (recursive={})",
+                "◉".yellow(),
+                path.display(),
+                recursive
+            );
             let mut pipeline = IngestPipeline::default_config();
             if let Some(ref llm) = llm_client {
                 pipeline = pipeline.with_llm(llm.clone());
@@ -432,14 +480,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             save_snapshot(&graph, &hdc, &store).await?;
         }
         Commands::Daemon { http } => {
-            cmd_daemon(graph.clone(), hdc.clone(), store.clone(), &config, http, llm_client.clone()).await?;
+            cmd_daemon(
+                graph.clone(),
+                hdc.clone(),
+                store.clone(),
+                &config,
+                http,
+                llm_client.clone(),
+            )
+            .await?;
         }
         Commands::IngestCode { path } => {
             println!("{}", "Ingesting Rust source code...".cyan());
             let mut g = graph.write().await;
             let result = soma_ingest::code::ingest_rust_directory(&mut g, &path, "cli/ingest-code");
             drop(g);
-            println!("{} {} files, {} functions, {} structs, {} traits, {} edges",
+            println!(
+                "{} {} files, {} functions, {} structs, {} traits, {} edges",
                 "✓".green(),
                 result.files_processed,
                 result.functions_found,
@@ -462,14 +519,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("{}", "-".repeat(result.columns.len() * 15));
                         // Print rows
                         for row in &result.rows {
-                            let cols: Vec<String> = row.iter().map(|v| match v {
-                                soma_cypher::CypherValue::String(s) => s.clone(),
-                                soma_cypher::CypherValue::Float(f) => format!("{:.3}", f),
-                                soma_cypher::CypherValue::Int(i) => i.to_string(),
-                                soma_cypher::CypherValue::Bool(b) => b.to_string(),
-                                soma_cypher::CypherValue::Null => "null".into(),
-                                soma_cypher::CypherValue::Node(n) => format!("({}:{})", n.label, n.kind),
-                            }).collect();
+                            let cols: Vec<String> = row
+                                .iter()
+                                .map(|v| match v {
+                                    soma_cypher::CypherValue::String(s) => s.clone(),
+                                    soma_cypher::CypherValue::Float(f) => format!("{:.3}", f),
+                                    soma_cypher::CypherValue::Int(i) => i.to_string(),
+                                    soma_cypher::CypherValue::Bool(b) => b.to_string(),
+                                    soma_cypher::CypherValue::Null => "null".into(),
+                                    soma_cypher::CypherValue::Node(n) => {
+                                        format!("({}:{})", n.label, n.kind)
+                                    }
+                                })
+                                .collect();
                             println!("{}", cols.join(" | "));
                         }
                         println!("\n{} row(s)", result.rows.len());
@@ -525,10 +587,16 @@ fn dirs_home() -> PathBuf {
 fn replay_wal_entry(graph: &mut StigreGraph, entry: &soma_store::WalEntry) {
     match entry {
         soma_store::WalEntry::NodeUpsert(node) => {
-            graph.upsert_node(&node.label, node.kind.clone());
+            graph.upsert_node(&node.label, node.kind);
         }
         soma_store::WalEntry::EdgeUpsert(edge) => {
-            graph.upsert_edge(edge.from, edge.to, edge.channel, edge.confidence, &edge.source);
+            graph.upsert_edge(
+                edge.from,
+                edge.to,
+                edge.channel,
+                edge.confidence,
+                &edge.source,
+            );
         }
         soma_store::WalEntry::EdgeReinforce { id, .. } => {
             graph.reinforce_edge(*id);
@@ -573,11 +641,17 @@ async fn save_snapshot(
     let stats = g.stats();
     let mut s = store.write().await;
     s.write_snapshot(&graph_json, Some(&hdc_json), stats.nodes, stats.edges)?;
-    eprintln!("{} Snapshot saved ({} nodes, {} edges, HDC vocab={})",
-        "✓".green(), stats.nodes, stats.edges, h.vocab_size());
+    eprintln!(
+        "{} Snapshot saved ({} nodes, {} edges, HDC vocab={})",
+        "✓".green(),
+        stats.nodes,
+        stats.edges,
+        h.vocab_size()
+    );
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn cmd_add(
     graph: &Arc<RwLock<StigreGraph>>,
     hdc: &Arc<RwLock<HdcEngine>>,
@@ -611,7 +685,11 @@ async fn cmd_add(
     drop(g);
 
     // Auto-train HDC on new labels (train them all as sentences for context)
-    let new_labels: Vec<String> = result.created_nodes.iter().map(|n| n.label.clone()).collect();
+    let new_labels: Vec<String> = result
+        .created_nodes
+        .iter()
+        .map(|n| n.label.clone())
+        .collect();
     let hdc_trained = if !new_labels.is_empty() {
         let mut h = hdc.write().await;
         let vocab_before = h.vocab_size();
@@ -674,7 +752,11 @@ async fn cmd_ingest(
     drop(g);
 
     // Auto-train HDC on new labels
-    let new_labels: Vec<String> = result.created_nodes.iter().map(|n| n.label.clone()).collect();
+    let new_labels: Vec<String> = result
+        .created_nodes
+        .iter()
+        .map(|n| n.label.clone())
+        .collect();
     let hdc_trained = if !new_labels.is_empty() {
         let mut h = hdc.write().await;
         let vocab_before = h.vocab_size();
@@ -713,6 +795,7 @@ async fn cmd_ingest(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn cmd_search(
     graph: &Arc<RwLock<StigreGraph>>,
     hdc: &Arc<RwLock<HdcEngine>>,
@@ -773,7 +856,10 @@ async fn cmd_search(
         // Legacy mode: graph-only results
         let elapsed = start.elapsed();
         // Re-create results for display
-        let q = SomaQuery::new(query).with_max_hops(max_hops).with_channels(channels).with_limit(limit);
+        let q = SomaQuery::new(query)
+            .with_max_hops(max_hops)
+            .with_channels(channels)
+            .with_limit(limit);
         let graph_results = g.traverse(&q);
         display_search_results(query, &graph_results, elapsed);
         return Ok(());
@@ -854,16 +940,19 @@ async fn cmd_search(
     }
 
     if json_mode {
-        let json_results: Vec<serde_json::Value> = final_results.iter().map(|r| {
-            serde_json::json!({
-                "label": r.node.label,
-                "kind": r.node.kind.as_str(),
-                "score": r.score,
-                "hops": r.hops,
-                "sources": r.sources,
-                "tags": r.node.tags,
+        let json_results: Vec<serde_json::Value> = final_results
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "label": r.node.label,
+                    "kind": r.node.kind.as_str(),
+                    "score": r.score,
+                    "hops": r.hops,
+                    "sources": r.sources,
+                    "tags": r.node.tags,
+                })
             })
-        }).collect();
+            .collect();
         println!("{}", serde_json::to_string_pretty(&json_results)?);
     } else if final_results.is_empty() {
         eprintln!("{} No results for '{}'", "✗".red(), query);
@@ -954,8 +1043,8 @@ async fn cmd_relate(
     channel: &str,
     confidence: f32,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let ch = Channel::from_str_name(channel)
-        .ok_or_else(|| format!("unknown channel: {}", channel))?;
+    let ch =
+        Channel::from_str_name(channel).ok_or_else(|| format!("unknown channel: {}", channel))?;
 
     let mut g = graph.write().await;
     let from_id = g.upsert_node(from, NodeKind::Entity);
@@ -990,27 +1079,27 @@ async fn cmd_stats(
     let h = hdc.read().await;
 
     if json_mode {
-        println!("{}", serde_json::to_string_pretty(&serde_json::json!({
-            "workspace": stats.workspace,
-            "nodes": stats.nodes,
-            "edges": stats.edges,
-            "dead_edges": stats.dead_edges,
-            "avg_intensity": stats.avg_intensity,
-            "hdc_vocab": h.vocab_size(),
-            "hdc_dim": h.dim(),
-            "neural_embeddings": h.neural_count(),
-            "neural_dim": h.neural_dim(),
-        }))?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "workspace": stats.workspace,
+                "nodes": stats.nodes,
+                "edges": stats.edges,
+                "dead_edges": stats.dead_edges,
+                "avg_intensity": stats.avg_intensity,
+                "hdc_vocab": h.vocab_size(),
+                "hdc_dim": h.dim(),
+                "neural_embeddings": h.neural_count(),
+                "neural_dim": h.neural_dim(),
+            }))?
+        );
     } else {
         println!("{}", "═══ SOMA Stats ═══".cyan().bold());
         println!("  Workspace:      {}", stats.workspace);
         println!("  Nodes:          {}", stats.nodes);
         println!("  Edges:          {}", stats.edges);
         println!("  Dead edges:     {}", stats.dead_edges);
-        println!(
-            "  Avg intensity:  {:.3}",
-            stats.avg_intensity
-        );
+        println!("  Avg intensity:  {:.3}", stats.avg_intensity);
         println!("  HDC vocab:      {}", h.vocab_size());
         println!("  HDC dim:        {}", h.dim());
         println!("  Neural emb:     {}", h.neural_count());
@@ -1075,11 +1164,7 @@ async fn cmd_embed(
         return Ok(());
     }
 
-    eprintln!(
-        "{} Embedding {} labels...",
-        "→".cyan(),
-        total
-    );
+    eprintln!("{} Embedding {} labels...", "→".cyan(), total);
 
     let mut embedded = 0usize;
     let mut skipped = 0usize;
@@ -1113,7 +1198,7 @@ async fn cmd_embed(
             }
         }
 
-        if embedded > 0 && embedded % 50 == 0 {
+        if embedded > 0 && embedded.is_multiple_of(50) {
             eprintln!("  ... {}/{} embedded", embedded, total);
         }
     }
@@ -1140,7 +1225,10 @@ async fn cmd_embed(
         let stats = g.stats();
         let mut s = store.write().await;
         s.write_snapshot(&graph_json, Some(&hdc_json), stats.nodes, stats.edges)?;
-        eprintln!("{} HDC snapshot saved (with neural embeddings)", "✓".green());
+        eprintln!(
+            "{} HDC snapshot saved (with neural embeddings)",
+            "✓".green()
+        );
     }
 
     Ok(())
@@ -1162,35 +1250,44 @@ async fn cmd_show(
     let incoming = g.incoming_edges(node_id);
 
     if json_mode {
-        let out_json: Vec<serde_json::Value> = outgoing.iter().map(|e| {
-            let to_label = g.get_node(e.to).map(|n| n.label.as_str()).unwrap_or("?");
-            serde_json::json!({
-                "to": to_label,
-                "channel": e.channel.to_string(),
-                "intensity": e.confidence,
-                "uses": e.uses,
-                "source": e.source,
+        let out_json: Vec<serde_json::Value> = outgoing
+            .iter()
+            .map(|e| {
+                let to_label = g.get_node(e.to).map(|n| n.label.as_str()).unwrap_or("?");
+                serde_json::json!({
+                    "to": to_label,
+                    "channel": e.channel.to_string(),
+                    "intensity": e.confidence,
+                    "uses": e.uses,
+                    "source": e.source,
+                })
             })
-        }).collect();
-        let in_json: Vec<serde_json::Value> = incoming.iter().map(|e| {
-            let from_label = g.get_node(e.from).map(|n| n.label.as_str()).unwrap_or("?");
-            serde_json::json!({
-                "from": from_label,
-                "channel": e.channel.to_string(),
-                "intensity": e.confidence,
-                "uses": e.uses,
-                "source": e.source,
+            .collect();
+        let in_json: Vec<serde_json::Value> = incoming
+            .iter()
+            .map(|e| {
+                let from_label = g.get_node(e.from).map(|n| n.label.as_str()).unwrap_or("?");
+                serde_json::json!({
+                    "from": from_label,
+                    "channel": e.channel.to_string(),
+                    "intensity": e.confidence,
+                    "uses": e.uses,
+                    "source": e.source,
+                })
             })
-        }).collect();
-        println!("{}", serde_json::to_string_pretty(&serde_json::json!({
-            "label": node.label,
-            "kind": node.kind.as_str(),
-            "created_at": node.created_at.to_rfc3339(),
-            "last_seen": node.last_seen.to_rfc3339(),
-            "tags": node.tags,
-            "outgoing": out_json,
-            "incoming": in_json,
-        }))?);
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "label": node.label,
+                "kind": node.kind.as_str(),
+                "created_at": node.created_at.to_rfc3339(),
+                "last_seen": node.last_seen.to_rfc3339(),
+                "tags": node.tags,
+                "outgoing": out_json,
+                "incoming": in_json,
+            }))?
+        );
     } else {
         println!("{}", format!("═══ {} ═══", node.label).cyan().bold());
         println!("  Kind:       {}", node.kind);
@@ -1239,13 +1336,18 @@ async fn cmd_list(
     let g = graph.read().await;
 
     let kind_filter = kind.as_deref().and_then(NodeKind::from_str_name);
-    let mut nodes: Vec<_> = g.all_nodes()
+    let mut nodes: Vec<_> = g
+        .all_nodes()
         .filter(|n| {
             if let Some(k) = &kind_filter {
-                if n.kind != *k { return false; }
+                if n.kind != *k {
+                    return false;
+                }
             }
             if let Some(ref t) = tag {
-                if !n.tags.iter().any(|nt| nt == t) { return false; }
+                if !n.tags.iter().any(|nt| nt == t) {
+                    return false;
+                }
             }
             true
         })
@@ -1256,35 +1358,40 @@ async fn cmd_list(
     nodes.truncate(limit);
 
     if json_mode {
-        let json_nodes: Vec<serde_json::Value> = nodes.iter().map(|n| {
-            serde_json::json!({
-                "label": n.label,
-                "kind": n.kind.as_str(),
-                "created_at": n.created_at.to_rfc3339(),
-                "last_seen": n.last_seen.to_rfc3339(),
-                "tags": n.tags,
+        let json_nodes: Vec<serde_json::Value> = nodes
+            .iter()
+            .map(|n| {
+                serde_json::json!({
+                    "label": n.label,
+                    "kind": n.kind.as_str(),
+                    "created_at": n.created_at.to_rfc3339(),
+                    "last_seen": n.last_seen.to_rfc3339(),
+                    "tags": n.tags,
+                })
             })
-        }).collect();
+            .collect();
         println!("{}", serde_json::to_string_pretty(&json_nodes)?);
+    } else if nodes.is_empty() {
+        eprintln!("{} No nodes found", "✗".red());
     } else {
-        if nodes.is_empty() {
-            eprintln!("{} No nodes found", "✗".red());
-        } else {
-            println!("{} ({} nodes)\n", "═══ SOMA Nodes ═══".cyan().bold(), nodes.len());
-            for n in &nodes {
-                let tags_str = if n.tags.is_empty() {
-                    String::new()
-                } else {
-                    format!(" {{{}}}", n.tags.join(", "))
-                };
-                println!(
-                    "  {} {} {}{}",
-                    n.label,
-                    format!("({})", n.kind).dimmed(),
-                    n.last_seen.format("%Y-%m-%d").to_string().dimmed(),
-                    tags_str.dimmed(),
-                );
-            }
+        println!(
+            "{} ({} nodes)\n",
+            "═══ SOMA Nodes ═══".cyan().bold(),
+            nodes.len()
+        );
+        for n in &nodes {
+            let tags_str = if n.tags.is_empty() {
+                String::new()
+            } else {
+                format!(" {{{}}}", n.tags.join(", "))
+            };
+            println!(
+                "  {} {} {}{}",
+                n.label,
+                format!("({})", n.kind).dimmed(),
+                n.last_seen.format("%Y-%m-%d").to_string().dimmed(),
+                tags_str.dimmed(),
+            );
         }
     }
     Ok(())
@@ -1295,7 +1402,8 @@ fn build_html_viz(g: &StigreGraph) -> Result<String, Box<dyn std::error::Error>>
 
     // Collect node data
     let mut nodes_json = Vec::new();
-    let mut node_degrees: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut node_degrees: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
 
     // Count degrees
     for edge in g.all_edges() {
@@ -1335,7 +1443,8 @@ fn build_html_viz(g: &StigreGraph) -> Result<String, Box<dyn std::error::Error>>
     });
 
     let stats = g.stats();
-    let html = format!(r##"<!DOCTYPE html>
+    let html = format!(
+        r##"<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1478,9 +1587,7 @@ async fn cmd_export(
     let g = graph.read().await;
 
     let content = match format {
-        "json" => {
-            serde_json::to_string_pretty(g.inner())?
-        }
+        "json" => serde_json::to_string_pretty(g.inner())?,
         "dot" => {
             let mut lines = vec!["digraph soma {".to_string()];
             lines.push("  rankdir=LR;".to_string());
@@ -1491,7 +1598,10 @@ async fn cmd_export(
                 ));
             }
             for edge in g.all_edges() {
-                let from_label = g.get_node(edge.from).map(|n| n.label.as_str()).unwrap_or("?");
+                let from_label = g
+                    .get_node(edge.from)
+                    .map(|n| n.label.as_str())
+                    .unwrap_or("?");
                 let to_label = g.get_node(edge.to).map(|n| n.label.as_str()).unwrap_or("?");
                 lines.push(format!(
                     "  \"{}\" -> \"{}\" [label=\"{} ({:.2})\"];",
@@ -1504,7 +1614,10 @@ async fn cmd_export(
         "csv" => {
             let mut lines = vec!["from,to,channel,intensity,uses,source".to_string()];
             for edge in g.all_edges() {
-                let from_label = g.get_node(edge.from).map(|n| n.label.as_str()).unwrap_or("?");
+                let from_label = g
+                    .get_node(edge.from)
+                    .map(|n| n.label.as_str())
+                    .unwrap_or("?");
                 let to_label = g.get_node(edge.to).map(|n| n.label.as_str()).unwrap_or("?");
                 lines.push(format!(
                     "\"{}\",\"{}\",{},{:.4},{},\"{}\"",
@@ -1513,17 +1626,24 @@ async fn cmd_export(
             }
             lines.join("\n")
         }
-        "html" => {
-            build_html_viz(&g)?
-        }
+        "html" => build_html_viz(&g)?,
         _ => {
-            return Err(format!("unknown export format: {} (use json, dot, csv, html)", format).into());
+            return Err(format!(
+                "unknown export format: {} (use json, dot, csv, html)",
+                format
+            )
+            .into());
         }
     };
 
     if let Some(path) = output {
         std::fs::write(&path, &content)?;
-        eprintln!("{} Exported to {} ({} format)", "✓".green(), path.display(), format);
+        eprintln!(
+            "{} Exported to {} ({} format)",
+            "✓".green(),
+            path.display(),
+            format
+        );
     } else {
         println!("{}", content);
     }
@@ -1533,7 +1653,7 @@ async fn cmd_export(
 async fn cmd_import(
     graph: &Arc<RwLock<StigreGraph>>,
     hdc: &Arc<RwLock<HdcEngine>>,
-    store: &Arc<RwLock<Store>>,
+    _store: &Arc<RwLock<Store>>,
     file: &std::path::Path,
     merge: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -1543,8 +1663,7 @@ async fn cmd_import(
 
     let content = std::fs::read_to_string(file)?;
     let imported_graph: petgraph::graph::DiGraph<soma_core::SomaNode, soma_core::StigreEdge> =
-        serde_json::from_str(&content)
-            .map_err(|e| format!("invalid JSON graph: {}", e))?;
+        serde_json::from_str(&content).map_err(|e| format!("invalid JSON graph: {}", e))?;
 
     if merge {
         // Merge mode: add imported nodes/edges into existing graph
@@ -1554,7 +1673,7 @@ async fn cmd_import(
 
         // First pass: upsert all nodes
         for node in imported_graph.node_weights() {
-            g.upsert_node(&node.label, node.kind.clone());
+            g.upsert_node(&node.label, node.kind);
             nodes_added += 1;
         }
 
@@ -1568,9 +1687,9 @@ async fn cmd_import(
                 let from_node = &imported_graph[from_idx];
                 let to_node = &imported_graph[to_idx];
 
-                let from_id = g.upsert_node(&from_node.label, from_node.kind.clone());
-                let to_id = g.upsert_node(&to_node.label, to_node.kind.clone());
-                g.upsert_edge(from_id, to_id, edge.channel.clone(), edge.confidence, &edge.source);
+                let from_id = g.upsert_node(&from_node.label, from_node.kind);
+                let to_id = g.upsert_node(&to_node.label, to_node.kind);
+                g.upsert_edge(from_id, to_id, edge.channel, edge.confidence, &edge.source);
                 edges_added += 1;
             }
         }
@@ -1651,7 +1770,11 @@ async fn cmd_alarm(
         s.write_wal(&soma_store::WalEntry::NodeUpsert(warning))?;
         if let Some(_eid) = edge_id {
             let edge = soma_core::StigreEdge::new(
-                entity_id, warning_id, Channel::Alarm, 0.9, "cli:alarm".into(),
+                entity_id,
+                warning_id,
+                Channel::Alarm,
+                0.9,
+                "cli:alarm".into(),
             );
             s.write_wal(&soma_store::WalEntry::EdgeUpsert(edge))?;
         }
@@ -1674,15 +1797,15 @@ async fn cmd_reinforce(
     to: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let g = graph.read().await;
-    let from_id = g.node_id_by_label(from)
+    let from_id = g
+        .node_id_by_label(from)
         .ok_or_else(|| format!("node '{}' not found", from))?;
 
     // Find all edges from → to
     let edges = g.outgoing_edges(from_id);
-    let matching: Vec<_> = edges.iter()
-        .filter(|e| {
-            g.get_node(e.to).map(|n| n.label == to).unwrap_or(false)
-        })
+    let matching: Vec<_> = edges
+        .iter()
+        .filter(|e| g.get_node(e.to).map(|n| n.label == to).unwrap_or(false))
         .map(|e| e.id)
         .collect();
     drop(g);
@@ -1706,7 +1829,13 @@ async fn cmd_reinforce(
             reinforced += 1;
         }
     }
-    eprintln!("{} Reinforced {} edge(s) from '{}' to '{}'", "✓".green(), reinforced, from, to);
+    eprintln!(
+        "{} Reinforced {} edge(s) from '{}' to '{}'",
+        "✓".green(),
+        reinforced,
+        from,
+        to
+    );
     Ok(())
 }
 
@@ -1811,11 +1940,10 @@ async fn cmd_context(
         String::new(),
     ];
 
-    let facts: Vec<_> = hybrid_results.iter()
+    let facts: Vec<_> = hybrid_results
+        .iter()
         .take(20)
-        .filter_map(|hr| {
-            g.get_node_by_label(&hr.label).map(|node| (node, hr))
-        })
+        .filter_map(|hr| g.get_node_by_label(&hr.label).map(|node| (node, hr)))
         .collect();
 
     if !facts.is_empty() {
@@ -1830,7 +1958,8 @@ async fn cmd_context(
     }
 
     // Alarms
-    let alarms: Vec<_> = g.all_nodes()
+    let alarms: Vec<_> = g
+        .all_nodes()
         .filter(|n| n.kind == NodeKind::Warning)
         .collect();
     if !alarms.is_empty() {
@@ -1844,11 +1973,14 @@ async fn cmd_context(
     let context = lines.join("\n");
 
     if json_mode {
-        println!("{}", serde_json::to_string_pretty(&serde_json::json!({
-            "context": context,
-            "facts": facts.len(),
-            "alarms": alarms.len(),
-        }))?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "context": context,
+                "facts": facts.len(),
+                "alarms": alarms.len(),
+            }))?
+        );
     } else {
         println!("{}", context);
     }
@@ -1866,9 +1998,18 @@ async fn cmd_daemon(
     eprintln!("{}", "═══ SOMA Daemon ═══".cyan().bold());
     eprintln!("  Biological scheduler: active");
     eprintln!("  Evaporation:    every 1h");
-    eprintln!("  Physarum:       every {}h", config.bio.physarum_interval_hours);
-    eprintln!("  Consolidation:  every {}h", config.bio.consolidation_interval_hours);
-    eprintln!("  Pruning:        every {}h", config.bio.pruning_interval_hours);
+    eprintln!(
+        "  Physarum:       every {}h",
+        config.bio.physarum_interval_hours
+    );
+    eprintln!(
+        "  Consolidation:  every {}h",
+        config.bio.consolidation_interval_hours
+    );
+    eprintln!(
+        "  Pruning:        every {}h",
+        config.bio.pruning_interval_hours
+    );
     if let Some(port) = http_port {
         eprintln!("  REST API:       http://0.0.0.0:{}", port);
     }
@@ -1880,19 +2021,13 @@ async fn cmd_daemon(
 
     if let Some(port) = http_port {
         // Build ToolHandler for HTTP (same one MCP uses)
-        let mut tool_handler = soma_mcp::ToolHandler::new(
-            graph.clone(),
-            hdc.clone(),
-            store.clone(),
-        );
+        let mut tool_handler =
+            soma_mcp::ToolHandler::new(graph.clone(), hdc.clone(), store.clone());
         if let Some(ref llm) = llm_client {
             tool_handler = tool_handler.with_llm(llm.clone());
         }
-        let http_server = soma_http::HttpServer::new(
-            Arc::new(tool_handler),
-            graph.clone(),
-            store.clone(),
-        );
+        let http_server =
+            soma_http::HttpServer::new(Arc::new(tool_handler), graph.clone(), store.clone());
 
         // Run bio loops + HTTP server + Ctrl+C in parallel
         tokio::select! {

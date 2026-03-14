@@ -90,7 +90,10 @@ impl HdcEngine {
         let seed = {
             let mut h = 0u64;
             for (i, b) in token.bytes().enumerate() {
-                h = h.wrapping_mul(31).wrapping_add(b as u64).wrapping_add(i as u64);
+                h = h
+                    .wrapping_mul(31)
+                    .wrapping_add(b as u64)
+                    .wrapping_add(i as u64);
             }
             h
         };
@@ -157,21 +160,23 @@ impl HdcEngine {
 
                 // Single-token sentence: use base vector as context vector
                 if len == 1 {
-                    let base = self.base_vectors.get(token)
+                    let base = self
+                        .base_vectors
+                        .get(token)
                         .expect("base vector must exist")
                         .clone();
-                    self.context_vectors
-                        .entry(token.clone())
-                        .or_insert(base);
+                    self.context_vectors.entry(token.clone()).or_insert(base);
                     continue;
                 }
 
-                for j in start..end {
+                for (j, neighbor) in tokens[start..end].iter().enumerate() {
+                    let j = j + start;
                     if i == j {
                         continue;
                     }
-                    let neighbor = &tokens[j];
-                    let base = self.base_vectors.get(neighbor)
+                    let base = self
+                        .base_vectors
+                        .get(neighbor)
                         .expect("base vector must exist (created in loop above)")
                         .clone();
 
@@ -278,12 +283,7 @@ impl HdcEngine {
     }
 
     /// Search: top-K candidates by sentence similarity.
-    pub fn search(
-        &self,
-        query: &str,
-        candidates: &[String],
-        k: usize,
-    ) -> Vec<(String, f32)> {
+    pub fn search(&self, query: &str, candidates: &[String], k: usize) -> Vec<(String, f32)> {
         let query_vec = self.encode_sentence(query);
 
         let mut scores: Vec<(String, f32)> = candidates
@@ -347,8 +347,7 @@ impl HdcEngine {
         if self.neural_dim.is_none() {
             self.neural_dim = Some(dim);
         }
-        self.neural_embeddings
-            .insert(key.to_lowercase(), embedding);
+        self.neural_embeddings.insert(key.to_lowercase(), embedding);
     }
 
     /// Check if a neural embedding exists for a key.
@@ -421,12 +420,12 @@ impl HdcEngine {
             if let Some(bv) = self.base_vectors.get(token) {
                 base_data.extend_from_slice(bv);
             } else {
-                base_data.extend(std::iter::repeat(0.0f32).take(self.dim));
+                base_data.extend(std::iter::repeat_n(0.0f32, self.dim));
             }
             if let Some(cv) = self.context_vectors.get(token) {
                 context_data.extend_from_slice(cv);
             } else {
-                context_data.extend(std::iter::repeat(0.0f32).take(self.dim));
+                context_data.extend(std::iter::repeat_n(0.0f32, self.dim));
             }
         }
 
@@ -572,7 +571,8 @@ mod tests {
         assert!(
             chromoq_egfp > chromoq_rust,
             "chromoq-egfp ({:.4}) should be > chromoq-rust ({:.4})",
-            chromoq_egfp, chromoq_rust
+            chromoq_egfp,
+            chromoq_rust
         );
     }
 
@@ -655,7 +655,10 @@ mod tests {
         engine.set_neural_embedding("test sentence here", neural.clone());
 
         let result = engine.encode_sentence("test sentence here");
-        assert_eq!(result, neural, "Should return neural embedding when available");
+        assert_eq!(
+            result, neural,
+            "Should return neural embedding when available"
+        );
         assert_ne!(result, hdc_vec, "Should differ from HDC vector");
     }
 

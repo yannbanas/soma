@@ -133,16 +133,22 @@ impl PatternExtractor {
                 let s = cap.get(1).map(|m| m.as_str().trim().to_string());
                 let o = cap.get(2).and_then(|m| {
                     let val = m.as_str().trim().to_string();
-                    if val.is_empty() { None } else { Some(val) }
+                    if val.is_empty() {
+                        None
+                    } else {
+                        Some(val)
+                    }
                 });
 
                 let (subject, object) = match (s, o) {
                     (Some(s), Some(o)) if !s.is_empty() => {
-                        if pattern.swap { (o, s) } else { (s, o) }
+                        if pattern.swap {
+                            (o, s)
+                        } else {
+                            (s, o)
+                        }
                     }
-                    (Some(s), None) if !s.is_empty() => {
-                        (s, "WARNING".to_string())
-                    }
+                    (Some(s), None) if !s.is_empty() => (s, "WARNING".to_string()),
                     _ => continue,
                 };
 

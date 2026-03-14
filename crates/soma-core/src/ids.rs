@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use std::fmt;
+use uuid::Uuid;
 
 /// Opaque, type-safe node identifier.
 /// Deterministic from label via UUID5 — two identical labels yield the same NodeId.

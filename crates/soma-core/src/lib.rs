@@ -3,20 +3,23 @@
 //! Zero internal dependencies. Defines NodeId, EdgeId, Channel, SomaNode, StigreEdge, SomaQuery.
 //! All types are type-safe, deterministic, and serializable.
 
-mod ids;
 mod channel;
-mod node;
-mod edge;
-mod query;
-mod error;
 mod config;
+mod edge;
+mod error;
 mod hybrid;
+mod ids;
+mod node;
+mod query;
 
-pub use ids::{NodeId, EdgeId};
 pub use channel::Channel;
-pub use node::{SomaNode, NodeKind};
-pub use edge::{StigreEdge, Provenance};
-pub use query::{SomaQuery, QueryResult};
+pub use config::{LlmSection, SomaConfig};
+pub use edge::{Provenance, StigreEdge};
 pub use error::SomaError;
-pub use config::{SomaConfig, LlmSection};
-pub use hybrid::{rrf_merge, rrf_merge_with_sources, rrf_merge_with_specificity, fuzzy_label_search, rerank_temporal, mmr_diversify, HybridResult};
+pub use hybrid::{
+    fuzzy_label_search, mmr_diversify, rerank_temporal, rrf_merge, rrf_merge_with_sources,
+    rrf_merge_with_specificity, HybridResult,
+};
+pub use ids::{EdgeId, NodeId};
+pub use node::{NodeKind, SomaNode};
+pub use query::{QueryResult, SomaQuery};

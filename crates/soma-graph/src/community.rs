@@ -9,7 +9,7 @@ use chrono::Utc;
 use petgraph::graph::DiGraph;
 use petgraph::visit::EdgeRef;
 
-use soma_core::{NodeId, SomaNode, StigreEdge};
+use soma_core::{SomaNode, StigreEdge};
 
 /// Result of community detection.
 #[derive(Debug, Clone)]
@@ -48,7 +48,9 @@ pub fn detect_communities(
         let u = edge.source().index();
         let v = edge.target().index();
         let w = edge.weight().effective_intensity(now) as f64;
-        if w < 0.001 { continue; }
+        if w < 0.001 {
+            continue;
+        }
         adj[u].push((v, w));
         adj[v].push((u, w)); // undirected
         total_weight += w;
@@ -65,7 +67,10 @@ pub fn detect_communities(
     let m2 = total_weight; // total weight (each edge counted once from each direction = 2m, but we already doubled)
 
     // Node strengths (sum of edge weights)
-    let strength: Vec<f64> = adj.iter().map(|edges| edges.iter().map(|(_, w)| w).sum()).collect();
+    let strength: Vec<f64> = adj
+        .iter()
+        .map(|edges| edges.iter().map(|(_, w)| w).sum())
+        .collect();
 
     // Phase 1: each node starts in its own community
     let mut community: Vec<usize> = (0..n).collect();
@@ -97,12 +102,14 @@ pub fn detect_communities(
             let mut best_delta = 0.0f64;
 
             for (&comm, &w_comm) in &comm_weights {
-                if comm == current_comm { continue; }
+                if comm == current_comm {
+                    continue;
+                }
                 let sigma_comm = comm_strength.get(&comm).copied().unwrap_or(0.0);
 
                 // Modularity gain formula
-                let delta = (w_comm - w_current) / m2
-                    - ki * (sigma_comm - sigma_current) / (m2 * m2);
+                let delta =
+                    (w_comm - w_current) / m2 - ki * (sigma_comm - sigma_current) / (m2 * m2);
 
                 if delta > best_delta {
                     best_delta = delta;
@@ -137,7 +144,10 @@ pub fn detect_communities(
     for (idx, &comm) in community.iter().enumerate() {
         if let Some(node) = graph.node_weights().nth(idx) {
             assignments.insert(node.label.clone(), comm);
-            communities.entry(comm).or_default().push(node.label.clone());
+            communities
+                .entry(comm)
+                .or_default()
+                .push(node.label.clone());
         }
     }
 
@@ -156,9 +166,14 @@ pub fn detect_communities(
 
 /// Compute modularity Q = (1/2m) Σ [A_ij - k_i*k_j/2m] δ(c_i, c_j)
 fn compute_modularity(community: &[usize], adj: &[Vec<(usize, f64)>], m2: f64) -> f64 {
-    if m2 < 1e-10 { return 0.0; }
+    if m2 < 1e-10 {
+        return 0.0;
+    }
 
-    let strength: Vec<f64> = adj.iter().map(|edges| edges.iter().map(|(_, w)| w).sum()).collect();
+    let strength: Vec<f64> = adj
+        .iter()
+        .map(|edges| edges.iter().map(|(_, w)| w).sum())
+        .collect();
     let mut q = 0.0f64;
 
     for (i, edges) in adj.iter().enumerate() {
@@ -176,7 +191,7 @@ fn compute_modularity(community: &[usize], adj: &[Vec<(usize, f64)>], m2: f64) -
 mod tests {
     use super::*;
     use petgraph::graph::DiGraph;
-    use soma_core::{Channel, NodeKind, NodeId};
+    use soma_core::{Channel, NodeId, NodeKind};
 
     #[test]
     fn empty_graph() {
@@ -199,7 +214,9 @@ mod tests {
         let f = g.add_node(SomaNode::new("test", "F", NodeKind::Entity));
 
         let id = |s: &str| NodeId::from_label(&format!("test:{}", s));
-        let edge = |from: &str, to: &str| StigreEdge::new(id(from), id(to), Channel::Trail, 0.9, "test".into());
+        let edge = |from: &str, to: &str| {
+            StigreEdge::new(id(from), id(to), Channel::Trail, 0.9, "test".into())
+        };
 
         // Cluster 1 edges
         g.add_edge(a, b, edge("A", "B"));
@@ -217,7 +234,10 @@ mod tests {
         g.add_edge(c, d, bridge);
 
         let result = detect_communities(&g, 2);
-        assert!(result.communities.len() >= 2, "should find at least 2 communities");
+        assert!(
+            result.communities.len() >= 2,
+            "should find at least 2 communities"
+        );
         assert!(result.modularity > 0.0, "modularity should be positive");
     }
 

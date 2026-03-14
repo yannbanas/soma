@@ -78,7 +78,8 @@ pub fn load_musique(path: &Path, limit: usize) -> Result<Vec<BenchQuestion>, Som
             .iter()
             .filter(|p| p.is_supporting)
             .map(|p| {
-                let entities = extract_entities_from_text(&p.title, &p.paragraph_text, &entry.answer);
+                let entities =
+                    extract_entities_from_text(&p.title, &p.paragraph_text, &entry.answer);
                 SupportingParagraph {
                     title: p.title.clone(),
                     text: p.paragraph_text.clone(),
@@ -148,7 +149,11 @@ pub fn load_hotpotqa(path: &Path, limit: usize) -> Result<Vec<BenchQuestion>, So
 
     let mut questions = Vec::new();
     let support_titles_set = |entry: &HotpotQAEntry| -> std::collections::HashSet<String> {
-        entry.supporting_facts.iter().map(|(title, _)| title.clone()).collect()
+        entry
+            .supporting_facts
+            .iter()
+            .map(|(title, _)| title.clone())
+            .collect()
     };
 
     for entry in entries.iter().take(limit) {
@@ -234,7 +239,11 @@ fn extract_entities_from_text(title: &str, text: &str, answer: &str) -> Vec<Stri
         let word = words[i].trim_matches(|c: char| !c.is_alphanumeric());
         if !word.is_empty()
             && word.len() >= 2
-            && word.chars().next().map(|c| c.is_uppercase()).unwrap_or(false)
+            && word
+                .chars()
+                .next()
+                .map(|c| c.is_uppercase())
+                .unwrap_or(false)
             && !is_common_word(word)
         {
             let mut parts = vec![word.to_string()];
@@ -242,7 +251,11 @@ fn extract_entities_from_text(title: &str, text: &str, answer: &str) -> Vec<Stri
             while j < words.len() {
                 let next = words[j].trim_matches(|c: char| !c.is_alphanumeric());
                 if !next.is_empty()
-                    && next.chars().next().map(|c| c.is_uppercase()).unwrap_or(false)
+                    && next
+                        .chars()
+                        .next()
+                        .map(|c| c.is_uppercase())
+                        .unwrap_or(false)
                 {
                     parts.push(next.to_string());
                     j += 1;
@@ -266,13 +279,54 @@ fn extract_entities_from_text(title: &str, text: &str, answer: &str) -> Vec<Stri
 fn is_common_word(w: &str) -> bool {
     matches!(
         w.to_lowercase().as_str(),
-        "the" | "a" | "an" | "and" | "or" | "but" | "in" | "on" | "at"
-            | "to" | "for" | "of" | "is" | "it" | "by" | "as" | "he"
-            | "she" | "they" | "this" | "that" | "was" | "were" | "has"
-            | "had" | "have" | "been" | "are" | "his" | "her" | "its"
-            | "from" | "with" | "not" | "also" | "who" | "which"
-            | "when" | "where" | "what" | "how" | "after" | "before"
-            | "during" | "between" | "into" | "over" | "under"
+        "the"
+            | "a"
+            | "an"
+            | "and"
+            | "or"
+            | "but"
+            | "in"
+            | "on"
+            | "at"
+            | "to"
+            | "for"
+            | "of"
+            | "is"
+            | "it"
+            | "by"
+            | "as"
+            | "he"
+            | "she"
+            | "they"
+            | "this"
+            | "that"
+            | "was"
+            | "were"
+            | "has"
+            | "had"
+            | "have"
+            | "been"
+            | "are"
+            | "his"
+            | "her"
+            | "its"
+            | "from"
+            | "with"
+            | "not"
+            | "also"
+            | "who"
+            | "which"
+            | "when"
+            | "where"
+            | "what"
+            | "how"
+            | "after"
+            | "before"
+            | "during"
+            | "between"
+            | "into"
+            | "over"
+            | "under"
     )
 }
 
@@ -299,11 +353,8 @@ mod tests {
 
     #[test]
     fn extract_entities_skips_common() {
-        let entities = extract_entities_from_text(
-            "Paris",
-            "The city is known for its art.",
-            "France",
-        );
+        let entities =
+            extract_entities_from_text("Paris", "The city is known for its art.", "France");
         assert!(entities.contains(&"Paris".to_string()));
         assert!(entities.contains(&"France".to_string()));
         // "The" should not be extracted

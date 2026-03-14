@@ -108,7 +108,10 @@ pub fn exact_match(prediction: &str, gold: &str) -> bool {
 /// Normalize an answer string: lowercase, remove punctuation, collapse whitespace.
 fn normalize_answer(s: &str) -> String {
     s.to_lowercase()
-        .replace(&['(', ')', ',', '.', '!', '?', ';', ':', '\'', '"', '-'][..], " ")
+        .replace(
+            &['(', ')', ',', '.', '!', '?', ';', ':', '\'', '"', '-'][..],
+            " ",
+        )
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
@@ -194,7 +197,12 @@ mod tests {
     #[test]
     fn path_recall_full_chain() {
         let chain = vec!["A".to_string(), "B".to_string(), "C".to_string()];
-        let retrieved = vec!["A".to_string(), "B".to_string(), "C".to_string(), "D".to_string()];
+        let retrieved = vec![
+            "A".to_string(),
+            "B".to_string(),
+            "C".to_string(),
+            "D".to_string(),
+        ];
         assert_eq!(path_recall(&chain, &retrieved), 1.0);
     }
 

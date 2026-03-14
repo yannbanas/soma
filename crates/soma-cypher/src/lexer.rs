@@ -25,26 +25,26 @@ pub enum Token {
     FloatLit(f64),
     BoolLit(bool),
     // Symbols
-    LParen,     // (
-    RParen,     // )
-    LBracket,   // [
-    RBracket,   // ]
-    LBrace,     // {
-    RBrace,     // }
-    Colon,      // :
-    Comma,      // ,
-    Dot,        // .
-    Arrow,      // ->
-    LeftArrow,  // <-
-    Dash,       // -
-    Star,       // *
-    DotDot,     // ..
-    Eq,         // =
-    Neq,        // <>
-    Lt,         // <
-    Gt,         // >
-    Lte,        // <=
-    Gte,        // >=
+    LParen,    // (
+    RParen,    // )
+    LBracket,  // [
+    RBracket,  // ]
+    LBrace,    // {
+    RBrace,    // }
+    Colon,     // :
+    Comma,     // ,
+    Dot,       // .
+    Arrow,     // ->
+    LeftArrow, // <-
+    Dash,      // -
+    Star,      // *
+    DotDot,    // ..
+    Eq,        // =
+    Neq,       // <>
+    Lt,        // <
+    Gt,        // >
+    Lte,       // <=
+    Gte,       // >=
     Eof,
 }
 
@@ -102,16 +102,46 @@ impl Lexer {
         };
 
         match ch {
-            '(' => { self.advance(); Ok(Token::LParen) }
-            ')' => { self.advance(); Ok(Token::RParen) }
-            '[' => { self.advance(); Ok(Token::LBracket) }
-            ']' => { self.advance(); Ok(Token::RBracket) }
-            '{' => { self.advance(); Ok(Token::LBrace) }
-            '}' => { self.advance(); Ok(Token::RBrace) }
-            ':' => { self.advance(); Ok(Token::Colon) }
-            ',' => { self.advance(); Ok(Token::Comma) }
-            '*' => { self.advance(); Ok(Token::Star) }
-            '=' => { self.advance(); Ok(Token::Eq) }
+            '(' => {
+                self.advance();
+                Ok(Token::LParen)
+            }
+            ')' => {
+                self.advance();
+                Ok(Token::RParen)
+            }
+            '[' => {
+                self.advance();
+                Ok(Token::LBracket)
+            }
+            ']' => {
+                self.advance();
+                Ok(Token::RBracket)
+            }
+            '{' => {
+                self.advance();
+                Ok(Token::LBrace)
+            }
+            '}' => {
+                self.advance();
+                Ok(Token::RBrace)
+            }
+            ':' => {
+                self.advance();
+                Ok(Token::Colon)
+            }
+            ',' => {
+                self.advance();
+                Ok(Token::Comma)
+            }
+            '*' => {
+                self.advance();
+                Ok(Token::Star)
+            }
+            '=' => {
+                self.advance();
+                Ok(Token::Eq)
+            }
 
             '.' => {
                 self.advance();
@@ -136,9 +166,18 @@ impl Lexer {
             '<' => {
                 self.advance();
                 match self.peek() {
-                    Some('-') => { self.advance(); Ok(Token::LeftArrow) }
-                    Some('=') => { self.advance(); Ok(Token::Lte) }
-                    Some('>') => { self.advance(); Ok(Token::Neq) }
+                    Some('-') => {
+                        self.advance();
+                        Ok(Token::LeftArrow)
+                    }
+                    Some('=') => {
+                        self.advance();
+                        Ok(Token::Lte)
+                    }
+                    Some('>') => {
+                        self.advance();
+                        Ok(Token::Neq)
+                    }
                     _ => Ok(Token::Lt),
                 }
             }
@@ -169,16 +208,17 @@ impl Lexer {
         loop {
             match self.advance() {
                 Some(c) if c == quote => return Ok(Token::StringLit(s)),
-                Some('\\') => {
-                    match self.advance() {
-                        Some('n') => s.push('\n'),
-                        Some('t') => s.push('\t'),
-                        Some('\\') => s.push('\\'),
-                        Some(c) if c == quote => s.push(c),
-                        Some(c) => { s.push('\\'); s.push(c); }
-                        None => return Err("Unterminated string escape".into()),
+                Some('\\') => match self.advance() {
+                    Some('n') => s.push('\n'),
+                    Some('t') => s.push('\t'),
+                    Some('\\') => s.push('\\'),
+                    Some(c) if c == quote => s.push(c),
+                    Some(c) => {
+                        s.push('\\');
+                        s.push(c);
                     }
-                }
+                    None => return Err("Unterminated string escape".into()),
+                },
                 Some(c) => s.push(c),
                 None => return Err("Unterminated string literal".into()),
             }
