@@ -1198,7 +1198,8 @@ async fn cmd_embed(
             }
         }
 
-        if embedded > 0 && embedded.is_multiple_of(50) {
+        #[allow(clippy::manual_is_multiple_of)]
+        if embedded > 0 && embedded % 50 == 0 {
             eprintln!("  ... {}/{} embedded", embedded, total);
         }
     }

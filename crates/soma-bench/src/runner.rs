@@ -108,7 +108,8 @@ pub fn run_benchmark_full(
             title_entities.insert(title.clone(), ent_names);
 
             ingested += 1;
-            if llm_client.is_some() && ingested.is_multiple_of(20) {
+            #[allow(clippy::manual_is_multiple_of)]
+            if llm_client.is_some() && ingested % 20 == 0 {
                 eprint!(
                     "\r  Ingesting with LLM: {}/{} paragraphs...",
                     ingested, total_paragraphs
